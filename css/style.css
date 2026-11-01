@@ -32,17 +32,56 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .panel {
   background: var(--panel);
   border-right: 1px solid var(--line);
-  overflow-y: auto;
-  scrollbar-color: #3a404a transparent;
-  scrollbar-width: thin;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
-.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 2; }
+#panel-sections {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-color: #3a404a transparent;
+  scrollbar-width: thin;
+}
+.brand { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
 .brand h1 { font-size: 15px; margin: 0; letter-spacing: 0.02em; }
 .brand p { margin: 0; color: var(--muted); font-size: 12px; }
 .logo { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, #f3d48a, #b9852b); color: #3a2a08; font-size: 18px; }
-.panel-foot { margin-top: auto; padding: 12px 16px; color: var(--muted); font-size: 11px; border-top: 1px solid var(--line); }
+.panel-foot {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+.foot-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.foot-actions button {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  text-align: center;
+}
+.foot-actions button:hover { border-color: var(--accent); }
+.foot-actions button.primary {
+  grid-column: 1 / -1;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.foot-actions button.primary:hover { filter: brightness(1.06); }
+.foot-note { color: var(--muted); font-size: 11px; text-align: center; }
 
 details.sec { border-bottom: 1px solid var(--line); }
 details.sec > summary {

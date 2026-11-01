@@ -462,6 +462,10 @@ window.PP = window.PP || {};
     saveBtn.addEventListener("click", doSavePreset);
     nameInp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doSavePreset(); } });
     renderSaved();
+    buildPresets._saveNamed = (customName) => {
+      if (customName != null) nameInp.value = customName;
+      doSavePreset();
+    };
   }
 
   function buildStyles(body) {
@@ -778,6 +782,19 @@ window.PP = window.PP || {};
       document.querySelectorAll("[data-cam]").forEach((b) => b.addEventListener("click", () => lastDesign && PP.view3d.resetCamera(lastDesign, b.dataset.cam)));
       $("#fit2d").addEventListener("click", () => lastDesign && PP.view2d.resetView(lastDesign.W, lastDesign.H));
       $("#layer-slider").addEventListener("input", onLayer);
+      $("#foot-3mf").addEventListener("click", export3MF);
+      $("#foot-save-json").addEventListener("click", () => PP.exporters.download(new Blob([JSON.stringify(state, null, 1)], { type: "application/json" }), baseName() + "-settings.json"));
+      $("#foot-save-preset").addEventListener("click", () => {
+        const inp = $("#preset-name");
+        let name = inp && inp.value.trim();
+        if (!name) {
+          const list = loadSavedPresets();
+          const ans = prompt("Save current setup as local preset:", `Preset ${list.length + 1}`);
+          if (ans === null) return;
+          name = ans.trim() || `Preset ${list.length + 1}`;
+        }
+        if (buildPresets._saveNamed) buildPresets._saveNamed(name);
+      });
       const hv = (location.hash.match(/view=(\w+)/) || [])[1];
       setView(hv || "split");
       rebuild();

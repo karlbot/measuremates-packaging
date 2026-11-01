@@ -16,7 +16,14 @@
       </div>
     </header>
     <div id="panel-sections"></div>
-    <footer class="panel-foot">Settings auto-save in this browser. Units: mm.</footer>
+    <footer class="panel-foot">
+      <div class="foot-actions">
+        <button type="button" id="foot-save-preset" title="Save current setup to local presets">Save preset</button>
+        <button type="button" id="foot-save-json" title="Download settings (.json)">Save settings</button>
+        <button type="button" id="foot-3mf" class="primary" title="Download multi-colour 3MF for slicing">Download 3MF</button>
+      </div>
+      <div class="foot-note">Settings auto-save in this browser. Units: mm.</div>
+    </footer>
   </aside>
 
   <main class="stage">
