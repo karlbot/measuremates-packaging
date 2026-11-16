@@ -16,6 +16,8 @@
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+/* The app is a fixed-viewport layout: never let focus/scrollIntoView scroll the document itself. */
+html { overflow: clip; }
 body {
   display: grid;
   grid-template-columns: 340px 1fr;
@@ -38,6 +40,7 @@ button, select, input, textarea { font: inherit; color: inherit; }
   min-height: 0;
 }
 #panel-sections {
+  position: relative; /* containing block for any absolutely positioned control inside the scroller */
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -137,8 +140,11 @@ input[type="file"]::file-selector-button {
 }
 
 .seg { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 2px; }
-.seg label { flex: 1; text-align: center; cursor: pointer; }
-.seg input { position: absolute; opacity: 0; pointer-events: none; }
+/* position: relative keeps the visually-hidden radio inside its label. Without it the radio is
+   positioned against the page (ignoring the sidebar's scroll), can land below the window, and
+   focusing it on click scrolls the whole page out of view ("page goes black"). */
+.seg label { flex: 1; text-align: center; cursor: pointer; position: relative; }
+.seg input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
 .seg span { display: block; padding: 4px 6px; border-radius: 5px; color: var(--muted); }
 .seg label:has(:checked) span { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .seg label:has(:focus-visible) span { outline: 2px solid var(--accent); outline-offset: 1px; }
