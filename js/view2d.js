@@ -180,4 +180,43 @@ window.PP = window.PP || {};
     s += `</g>\n</svg>\n`;
     return s;
   };
+
+  // Laser-cutting SVG for the FRONT layer: outer card cut, charm inset cut, and all markings for engraving.
+  V.exportLaserFrontSVG = function (design, model, p) {
+    const G = PP.geo;
+    const W = design.W, H = design.H;
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n<g transform="translate(0 ${H}) scale(1 -1)">\n`;
+    const P = (id, region, attrs) => region && region.length ? `  <path id="${id}" d="${G.toSvgD(region, 4)}" ${attrs}/>\n` : "";
+    s += `<g id="markings">\n`;
+    PP.GROUPS.forEach((gr) => {
+      const mode = p[gr.id + "Mode"];
+      if (mode === "off" || mode === "cut") return;
+      const mark = G.diff(design.groups[gr.id], design.pocket);
+      s += P(gr.id, mark, 'fill="#000000" stroke="none"');
+    });
+    s += `</g>\n`;
+    s += `<g id="cuts" fill="none" stroke-width="0.1">\n`;
+    PP.GROUPS.forEach((gr) => {
+      if (p[gr.id + "Mode"] !== "cut") return;
+      const cutFeat = G.diff(design.groups[gr.id], design.pocket);
+      s += P("cut-" + gr.id, cutFeat, 'stroke="#0000ff"');
+    });
+    s += P("charm-inset", design.pocket, 'stroke="#0000ff"');
+    s += P("card-outline", design.card, 'stroke="#ff0000"');
+    s += `</g>\n</g>\n</svg>\n`;
+    return s;
+  };
+
+  // Laser-cutting SVG for the BACK layer: just the outer card shape outline and the finger push-out hole.
+  V.exportLaserBackSVG = function (design) {
+    const G = PP.geo;
+    const W = design.W, H = design.H;
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n<g transform="translate(0 ${H}) scale(1 -1)" fill="none" stroke-width="0.1">\n`;
+    if (design.pushHole && design.pushHole.length) {
+      s += `  <path id="finger-hole" d="${G.toSvgD(design.pushHole, 4)}" stroke="#0000ff"/>\n`;
+    }
+    s += `  <path id="card-outline" d="${G.toSvgD(design.card, 4)}" stroke="#ff0000"/>\n`;
+    s += `</g>\n</svg>\n`;
+    return s;
+  };
 })();

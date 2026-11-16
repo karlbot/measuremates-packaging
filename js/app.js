@@ -521,6 +521,8 @@ window.PP = window.PP || {};
     body.innerHTML = `
       <div class="btn-grid">
         <button id="ex-3mf" class="primary">Download 3MF <small>multi-colour, one object</small></button>
+        <button id="ex-laser-front">Laser Front SVG <small>markings + charm inset</small></button>
+        <button id="ex-laser-back">Laser Back SVG <small>outline + finger hole</small></button>
         <button id="ex-stl">STLs (.zip) <small>one per colour</small></button>
         <button id="ex-svg">2D artwork SVG</button>
         <button id="ex-png">Preview PNG</button>
@@ -529,6 +531,8 @@ window.PP = window.PP || {};
       </div>
       <button id="reset-all" class="link">Reset everything to defaults</button>`;
     body.querySelector("#ex-3mf").addEventListener("click", export3MF);
+    body.querySelector("#ex-laser-front").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportLaserFrontSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-front.svg"));
+    body.querySelector("#ex-laser-back").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportLaserBackSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-back.svg"));
     body.querySelector("#ex-stl").addEventListener("click", exportSTL);
     body.querySelector("#ex-svg").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + ".svg"));
     body.querySelector("#ex-png").addEventListener("click", () => {

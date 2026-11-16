@@ -33,6 +33,9 @@ server, build step or internet connection. All libraries and fonts are in `vendo
 ## Export
 
 - **3MF.** One object with one part per colour, with colours assigned. Bambu Studio, PrusaSlicer and Orca open it as a multi-part object.
+- **Laser Front SVG & Laser Back SVG.** Two 1:1 `mm`-scaled SVGs for laser-cutting a two-layer card:
+  - **Laser Front SVG (`*-laser-front.svg`):** Outer card cut (`#ff0000`), charm pocket inset cut (`#0000ff`), and all markings (`#000000` fills in `#markings`) clipped outside the charm inset.
+  - **Laser Back SVG (`*-laser-back.svg`):** Just the outer card shape outline (`#ff0000`) and the finger push-out hole (`#0000ff`).
 - **STLs (.zip).** One STL per colour, all sharing the same origin.
 - **2D artwork SVG**, a **preview PNG**, and **settings JSON** (save/load). Settings also auto-save in the browser.
 
