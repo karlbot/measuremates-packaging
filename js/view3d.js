@@ -206,8 +206,37 @@ diffuseColor.rgb *= ppShade;`)
     return m;
   }
 
-  // Region -> extruded geometry.
+  // Region -> extruded geometry. Triangulation is the expensive part of a 3D refresh, so results are
+  // cached by (region contents, z0, z1): colour/material/layer-slider changes reuse geometry, and so
+  // do solids that didn't change when a single feature is edited.
+  const extrudeCache = new Map();
+  const EXTRUDE_CACHE_MAX = 600;
+  function regionKey(region) {
+    let h = 2166136261 >>> 0, n = 0;
+    for (let i = 0; i < region.length; i++) {
+      const p = region[i];
+      h = Math.imul(h ^ p.length, 16777619) >>> 0;
+      for (let j = 0; j < p.length; j++) { h = Math.imul(h ^ (p[j].X * 7 + p[j].Y * 13), 16777619) >>> 0; n++; }
+    }
+    return h.toString(36) + ":" + n;
+  }
   function extrude(region, z0, z1) {
+    const key = regionKey(region) + "|" + z0.toFixed(4) + "|" + z1.toFixed(4);
+    if (extrudeCache.has(key)) {
+      const g = extrudeCache.get(key);
+      extrudeCache.delete(key); extrudeCache.set(key, g); // LRU bump
+      return g;
+    }
+    const g = extrudeRaw(region, z0, z1);
+    extrudeCache.set(key, g);
+    if (extrudeCache.size > EXTRUDE_CACHE_MAX) {
+      const [k0, g0] = extrudeCache.entries().next().value;
+      extrudeCache.delete(k0);
+      g0 && g0.dispose();
+    }
+    return g;
+  }
+  function extrudeRaw(region, z0, z1) {
     const shapes = PP.geo.shapes(region).map((s) => {
       const sh = new THREE.Shape(s.outer.map(([x, y]) => new THREE.Vector2(x, y)));
       s.holes.forEach((h) => sh.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))));
@@ -216,9 +245,11 @@ diffuseColor.rgb *= ppShade;`)
     if (!shapes.length) return null;
     const g = new THREE.ExtrudeGeometry(shapes, { depth: z1 - z0, bevelEnabled: false, curveSegments: 1 });
     g.translate(0, 0, z0);
-    return g;
+    // Store non-indexed once so merging is a straight copy.
+    return g.index ? g.toNonIndexed() : g;
   }
 
+  // Concatenate cached geometries into one buffer (inputs are cached, so never disposed here).
   function merge(geoms) {
     geoms = geoms.filter(Boolean);
     if (!geoms.length) return null;
@@ -227,12 +258,10 @@ diffuseColor.rgb *= ppShade;`)
     const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
     let o = 0;
     geoms.forEach((g) => {
-      const gg = g.index ? g.toNonIndexed() : g;
-      pos.set(gg.attributes.position.array, o * 3);
-      if (gg.attributes.normal) nor.set(gg.attributes.normal.array, o * 3);
-      if (gg.attributes.uv) uv.set(gg.attributes.uv.array, o * 2);
-      o += gg.attributes.position.count;
-      g.dispose();
+      pos.set(g.attributes.position.array, o * 3);
+      if (g.attributes.normal) nor.set(g.attributes.normal.array, o * 3);
+      if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
+      o += g.attributes.position.count;
     });
     const out = new THREE.BufferGeometry();
     out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
@@ -249,7 +278,7 @@ diffuseColor.rgb *= ppShade;`)
     const zc = V._clipZ == null ? Infinity : V._clipZ;
     while (root.children.length) {
       const c = root.children.pop();
-      c.geometry && c.geometry.dispose();
+      if (c.geometry && !c.userData.cachedGeometry) c.geometry.dispose();
     }
     const colors = { body: p.colBody, accent1: p.colAccent1, accent2: p.colAccent2 };
     const byMat = {};
@@ -274,6 +303,7 @@ diffuseColor.rgb *= ppShade;`)
         const m = new THREE.Mesh(g, charmMat);
         m.castShadow = m.receiveShadow = true;
         m.userData.charm = true;
+        m.userData.cachedGeometry = true;
         root.add(m);
       }
     }

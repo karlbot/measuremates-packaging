@@ -277,14 +277,19 @@ window.PP = window.PP || {};
   };
 
   // Place a y-down drawing so its bbox centre is at (cx,cy) (mm, y-up) with total width W.
-  // strokeOverride (mm) replaces stroke widths; weight (mm) grows/shrinks the result.
+  // opt.strokeWidth (mm) replaces stroke widths; opt.weight (mm) grows/shrinks the result;
+  // opt.rotation (degrees, counter-clockwise) spins the drawing about its centre.
   PP.placeDrawing = function (dr, cx, cy, W, opt) {
     const G = PP.geo;
     opt = opt || {};
     const b = PP.drawingBounds(dr);
     if (!b || b.w <= 0) return [];
     const s = W / b.w;
-    const map = ([x, y]) => [cx + (x - b.cx) * s, cy - (y - b.cy) * s];
+    const a = ((opt.rotation || 0) * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const map = ([x, y]) => {
+      const dx = (x - b.cx) * s, dy = -(y - b.cy) * s;
+      return [cx + dx * ca - dy * sa, cy + dx * sa + dy * ca];
+    };
     const parts = [];
     dr.fills.forEach((f) => {
       const paths = G.toPaths(f.subs.map((sub) => sub.pts.map(map)));

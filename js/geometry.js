@@ -117,10 +117,12 @@ window.PP = window.PP || {};
   G.clean = (paths, distMM) => C.Clipper.CleanPolygons(paths, (distMM || 0.002) * S);
 
   // Region -> [{outer:[[x,y]...], holes:[[[x,y]...]...]}] (mm), via PolyTree.
-  G.shapes = (region) => {
+  // strict (default) splits touching contours for manifold triangulation; it is very slow on
+  // inputs with many small pieces, so pass strict=false when only areas/topology are needed.
+  G.shapes = (region, strict) => {
     if (!region || !region.length) return [];
     const c = new C.Clipper();
-    c.StrictlySimple = true; // split touching contours so triangulation/extrusion stays manifold
+    c.StrictlySimple = strict !== false;
     c.AddPaths(region, C.PolyType.ptSubject, true);
     const tree = new C.PolyTree();
     c.Execute(C.ClipType.ctUnion, tree, FT.nonzero, FT.nonzero);
@@ -143,7 +145,7 @@ window.PP = window.PP || {};
   // Number of enclosed islands that would fall out if region were cut through a sheet.
   G.countIslandsIfCut = (region, sheet) => {
     // Pieces of (sheet - region) that don't touch the sheet's outer boundary.
-    const rest = G.shapes(G.diff(sheet, region));
+    const rest = G.shapes(G.diff(sheet, region), false);
     return Math.max(0, rest.length - 1);
   };
 

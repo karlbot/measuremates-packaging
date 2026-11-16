@@ -4,6 +4,7 @@ window.PP = window.PP || {};
   const G = PP.geo;
   const fontCache = {};
   const glyphCache = {};
+  let fontVersion = 0; // bumped when an uploaded font is replaced, so cached wordmarks rebuild
 
   PP.getFont = function (id, customFonts) {
     if (fontCache[id]) return fontCache[id];
@@ -19,7 +20,7 @@ window.PP = window.PP || {};
     fontCache[id] = font;
     return font;
   };
-  PP.forgetFont = (id) => { delete fontCache[id]; Object.keys(glyphCache).forEach((k) => { if (k.startsWith(id + "|")) delete glyphCache[k]; }); };
+  PP.forgetFont = (id) => { fontVersion++; delete fontCache[id]; Object.keys(glyphCache).forEach((k) => { if (k.startsWith(id + "|")) delete glyphCache[k]; }); };
 
   // Label glyphs at font size 100 (y-down), cached as [x,y] polygons + bbox.
   function labelPolys(font, fontId, label) {
@@ -160,20 +161,21 @@ window.PP = window.PP || {};
     // ---------- wordmark ----------
     let wordmark = [];
     try {
-      const key = [p.wmSource, p.wmSource === "svg" ? p.wmSvgText && p.wmSvgText.length + ":" + p.wmSvgName : "", p.wmSource === "text" ? p.wmText + p.wmFont + p.wmLetterSpacing + p.wmLineHeight : "", p.wmIgnoreLight].join("|");
+      const key = [p.wmSource, p.wmSource === "svg" ? p.wmSvgText && p.wmSvgText.length + ":" + p.wmSvgName : "", p.wmSource === "text" ? p.wmText + p.wmFont + p.wmLetterSpacing + p.wmLineHeight + "@" + fontVersion : "", p.wmIgnoreLight].join("|");
       if (wmCache.key !== key) wmCache = { key, val: PP.wordmarkDrawing(p) };
       const { dr } = wmCache.val;
-      // Pen width is read live (it isn't part of the drawing cache key).
+      // Anything that only affects placement must be read live from p (not from the cached
+      // drawing) and appear in placeKey, otherwise edits are ignored until reload.
       const stroke = wmCache.val.stroke != null ? p.wmStroke : null;
       (dr.warnings || []).forEach((w) => (/^Ignored/.test(w) ? notes : warnings).push("Wordmark: " + w));
-      const placeKey = [key, p.wmX, p.wmY, p.wmWidth, stroke, p.wmWeight].join("|");
+      const placeKey = [key, p.wmX, p.wmY, p.wmWidth, stroke, p.wmWeight, p.wmRot || 0].join("|");
       if (wmCache.placeKey === placeKey) wordmark = wmCache.region;
       else {
         const b = PP.drawingBounds(dr);
         if (b) {
           // Width is the finished outer width; for the stroked original, account for the pen width.
           const centerW = stroke != null ? Math.max(1, p.wmWidth - stroke) : p.wmWidth;
-          wordmark = PP.placeDrawing(dr, p.wmX, p.wmY, centerW, { strokeWidth: stroke, weight: p.wmWeight });
+          wordmark = PP.placeDrawing(dr, p.wmX, p.wmY, centerW, { strokeWidth: stroke, weight: p.wmWeight, rotation: p.wmRot || 0 });
         }
         wmCache.placeKey = placeKey;
         wmCache.region = wordmark;

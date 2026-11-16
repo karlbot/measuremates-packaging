@@ -27,7 +27,7 @@ window.PP = window.PP || {};
     // Opening also rounds sharp corners; ignore those tiny corner slivers and keep only
     // genuinely narrow pieces (lines/strokes) as "thin".
     const minArea = 0.6 * minB * minB;
-    const thinPieces = G.shapes(G.diff(base, wide)).filter((s) => {
+    const thinPieces = G.shapes(G.diff(base, wide), false).filter((s) => {
       const a = Math.abs(polyArea(s.outer)) - s.holes.reduce((t, h) => t + Math.abs(polyArea(h)), 0);
       return a > minArea;
     });

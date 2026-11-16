@@ -18,7 +18,7 @@ window.PP = window.PP || {};
     frameOn: true, frameLen: 4.6, frameGap: 1.6, frameW: 0.327,
     // Wordmark
     wmSource: "original", wmText: "INCH\nWORM", wmFont: "permanent-marker", wmLetterSpacing: 0, wmLineHeight: 1.0,
-    wmX: 38.27, wmY: 76.82, wmWidth: 43.59, wmStroke: 2.126, wmWeight: 0, wmIgnoreLight: true,
+    wmX: 38.27, wmY: 76.82, wmWidth: 43.59, wmRot: 0, wmStroke: 2.126, wmWeight: 0, wmIgnoreLight: true,
     wmSvgText: null, wmSvgName: null,
     // Ruler
     rulerUnits: "in", rulerSub: 8, labelScheme: "clockwise",
@@ -90,6 +90,7 @@ window.PP = window.PP || {};
       { k: "_svgUpload", label: "SVG file", type: "file", accept: ".svg,image/svg+xml", when: (p) => p.wmSource === "svg", onFile: "svg", status: (p) => p.wmSvgName || "none loaded" },
       { k: "wmIgnoreLight", label: "Ignore white/background shapes", type: "check", when: (p) => p.wmSource === "svg" },
       { k: "wmWidth", label: "Width", type: "num", unit: "mm", min: 5, max: 200, step: 0.1 },
+      { k: "wmRot", label: "Rotation", type: "num", unit: "°", min: -180, max: 180, step: 0.5 },
       { k: "wmX", label: "Centre X", type: "num", unit: "mm", min: 0, max: 300, step: 0.1 },
       { k: "wmY", label: "Centre Y", type: "num", unit: "mm", min: 0, max: 300, step: 0.1, help: "Tip: drag the wordmark in the 2D view." },
     ] },
@@ -603,13 +604,22 @@ window.PP = window.PP || {};
   }
 
   // ---------- rebuild ----------
+  // Throttled rather than debounced: while a slider is dragged we keep rebuilding at the pace
+  // the pipeline allows (always using the latest state), instead of waiting for the drag to stop.
   let pending = null;
   function changed(key) {
     refreshVisibility();
-    saveState();
-    if (pending) clearTimeout(pending);
-    pending = setTimeout(rebuild, key === "drag" ? 0 : 40);
+    scheduleSave();
+    if (pending) return; // a rebuild is already queued and will read the latest state
+    pending = setTimeout(rebuild, key === "drag" ? 0 : 16);
   }
+  // localStorage writes serialise the whole state (incl. embedded fonts/SVG/DXF) - don't do it per input event.
+  let saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 300);
+  }
+  window.addEventListener("pagehide", () => { if (saveTimer) { clearTimeout(saveTimer); saveState(); } });
 
   function getCharm() {
     const text = state.charmDxfText || PP.DEFAULT_DXF;
