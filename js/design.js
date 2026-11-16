@@ -162,7 +162,9 @@ window.PP = window.PP || {};
     try {
       const key = [p.wmSource, p.wmSource === "svg" ? p.wmSvgText && p.wmSvgText.length + ":" + p.wmSvgName : "", p.wmSource === "text" ? p.wmText + p.wmFont + p.wmLetterSpacing + p.wmLineHeight : "", p.wmIgnoreLight].join("|");
       if (wmCache.key !== key) wmCache = { key, val: PP.wordmarkDrawing(p) };
-      const { dr, stroke } = wmCache.val;
+      const { dr } = wmCache.val;
+      // Pen width is read live (it isn't part of the drawing cache key).
+      const stroke = wmCache.val.stroke != null ? p.wmStroke : null;
       (dr.warnings || []).forEach((w) => (/^Ignored/.test(w) ? notes : warnings).push("Wordmark: " + w));
       const placeKey = [key, p.wmX, p.wmY, p.wmWidth, stroke, p.wmWeight].join("|");
       if (wmCache.placeKey === placeKey) wordmark = wmCache.region;
