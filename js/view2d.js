@@ -146,6 +146,19 @@ window.PP = window.PP || {};
     // Push-out hole outline stays visible on top of the charm.
     path(design.pushHole, { fill: "none", stroke: "#3b82f6", "stroke-width": 0.2, "stroke-dasharray": "0.8 0.5" });
 
+    // Laser preview: dim the print rendering and draw exactly what the front laser SVG contains.
+    if (p.laserPreview) {
+      const C = V.LASER_COLORS, L = V.laserFront(design, p);
+      path(design.card, { fill: "#ffffff", "fill-opacity": 0.82 });
+      const lg = el("g", { "pointer-events": "none" }, g);
+      const hair = { fill: "none", "vector-effect": "non-scaling-stroke", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" };
+      L.fills.forEach((f) => el("path", { d: f.d, fill: C.engrave, "fill-opacity": 0.85 }, lg));
+      L.lines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.score }, hair), lg));
+      L.cuts.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.cut }, hair), lg));
+      if (L.inset) el("path", Object.assign({ d: L.inset, stroke: C.cut }, hair), lg);
+      el("path", Object.assign({ d: L.outline, stroke: C.outline }, hair), lg);
+    }
+
     // Drag handles
     const handle = (b, kind, label) => {
       if (!b) return;
@@ -181,28 +194,57 @@ window.PP = window.PP || {};
     return s;
   };
 
-  // Laser-cutting SVG for the FRONT layer: outer card cut, charm inset cut, and all markings for engraving.
-  V.exportLaserFrontSVG = function (design, model, p) {
+  // Laser layers for the FRONT sheet, shared by the SVG export and the 2D laser preview.
+  // laserMarks = "fill": markings are filled shapes (raster/fill engrave).
+  // laserMarks = "line": markings are single centerlines (vector score / cut), using the
+  //   built-in single-stroke digits for numbers and pen centerlines for the original wordmark.
+  // Features set to "Cut through" always go to the cut layer.
+  V.laserFront = function (design, p) {
     const G = PP.geo;
-    const W = design.W, H = design.H;
-    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n<g transform="translate(0 ${H}) scale(1 -1)">\n`;
-    const P = (id, region, attrs) => region && region.length ? `  <path id="${id}" d="${G.toSvgD(region, 4)}" ${attrs}/>\n` : "";
-    s += `<g id="markings">\n`;
+    const free = G.diff(design.card, design.pocket);
+    const lineMode = p.laserMarks === "line";
+    const fills = [], lines = [], cuts = [];
     PP.GROUPS.forEach((gr) => {
       const mode = p[gr.id + "Mode"];
-      if (mode === "off" || mode === "cut") return;
-      const mark = G.diff(design.groups[gr.id], design.pocket);
-      s += P(gr.id, mark, 'fill="#000000" stroke="none"');
+      if (mode === "off") return;
+      if (lineMode) {
+        const L = G.clipOpen((design.lines || {})[gr.id] || [], free);
+        if (L.length) (mode === "cut" ? cuts : lines).push({ id: (mode === "cut" ? "cut-" : "") + gr.id, d: G.linesToSvgD(L, 4), open: true });
+      } else {
+        const R = G.diff(design.groups[gr.id], design.pocket);
+        if (!R.length) return;
+        if (mode === "cut") cuts.push({ id: "cut-" + gr.id, d: G.toSvgD(R, 4) });
+        else fills.push({ id: gr.id, d: G.toSvgD(R, 4) });
+      }
     });
-    s += `</g>\n`;
+    return {
+      fills, lines, cuts,
+      inset: design.pocket.length ? G.toSvgD(design.pocket, 4) : "",
+      outline: G.toSvgD(design.card, 4),
+    };
+  };
+
+  V.LASER_COLORS = { engrave: "#000000", score: "#000000", cut: "#0000ff", outline: "#ff0000" };
+
+  // Laser-cutting SVG for the FRONT layer: outer card cut, charm inset cut, and all markings.
+  V.exportLaserFrontSVG = function (design, model, p) {
+    const W = design.W, H = design.H, C = V.LASER_COLORS;
+    const L = V.laserFront(design, p);
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n<g transform="translate(0 ${H}) scale(1 -1)">\n`;
+    if (L.fills.length) {
+      s += `<g id="engrave" fill="${C.engrave}" stroke="none">\n`;
+      L.fills.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
+      s += `</g>\n`;
+    }
+    if (L.lines.length) {
+      s += `<g id="score" fill="none" stroke="${C.score}" stroke-width="0.1" stroke-linecap="round" stroke-linejoin="round">\n`;
+      L.lines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
+      s += `</g>\n`;
+    }
     s += `<g id="cuts" fill="none" stroke-width="0.1">\n`;
-    PP.GROUPS.forEach((gr) => {
-      if (p[gr.id + "Mode"] !== "cut") return;
-      const cutFeat = G.diff(design.groups[gr.id], design.pocket);
-      s += P("cut-" + gr.id, cutFeat, 'stroke="#0000ff"');
-    });
-    s += P("charm-inset", design.pocket, 'stroke="#0000ff"');
-    s += P("card-outline", design.card, 'stroke="#ff0000"');
+    L.cuts.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}" stroke="${C.cut}"/>\n`));
+    if (L.inset) s += `  <path id="charm-inset" d="${L.inset}" stroke="${C.cut}"/>\n`;
+    s += `  <path id="card-outline" d="${L.outline}" stroke="${C.outline}"/>\n`;
     s += `</g>\n</g>\n</svg>\n`;
     return s;
   };

@@ -40,6 +40,8 @@ window.PP = window.PP || {};
     // Printer / preview
     nozzle: 0.4, layerH: 0.2, firstLayerH: 0.2, simSlicer: true, minFeaturePct: 25, minBeadPct: 85,
     layerLines: true, topFinish: "lines", showPlate: true, showCharm: true, showThin: true,
+    // Laser cutting
+    laserMarks: "fill", laserPreview: false,
     customFonts: [],
   };
 
@@ -177,6 +179,11 @@ window.PP = window.PP || {};
       { k: "showCharm", label: "Show charm", type: "check" },
       { k: "showThin", label: "Highlight unprintable detail in 2D", type: "check" },
     ] },
+    { id: "laser", title: "Laser cutting", open: false, fields: [
+      { k: "laserMarks", label: "Markings on the front sheet", type: "seg", opts: [["fill", "Filled (engrave)"], ["line", "Single line (score)"]],
+        help: "Single line exports every tick, frame mark, number and the wordmark as one centerline - fast vector scoring. Numbers use a built-in single-stroke digit font; text/SVG-fill wordmarks fall back to their outlines." },
+      { k: "laserPreview", label: "Preview laser paths in the 2D view", type: "check" },
+    ], after: "laserButtons" },
     { id: "export", title: "Export & settings", open: true, custom: "export" },
   ];
 
@@ -264,6 +271,7 @@ window.PP = window.PP || {};
             inlineRow.appendChild(row);
           } else { inlineRow = null; body.appendChild(row); }
         });
+        if (sec.after === "laserButtons") buildLaserButtons(body);
       }
       panel.appendChild(det);
     });
@@ -353,6 +361,12 @@ window.PP = window.PP || {};
       const inp = row.querySelector("input");
       inp.addEventListener("change", () => { if (inp.files[0]) handleFile(f.onFile, inp.files[0]); inp.value = ""; });
       ctl.set = () => { const s = row.querySelector(".file-status"); if (s && f.status) s.textContent = "Loaded: " + f.status(state); };
+    }
+    if (f.help && f.type !== "num" && !f.inline) {
+      const h = document.createElement("div");
+      h.className = "hint";
+      h.textContent = f.help;
+      row.appendChild(h);
     }
     controls.push(ctl);
     return row;
@@ -518,6 +532,27 @@ window.PP = window.PP || {};
     body.appendChild(note);
   }
 
+  function exportLaserFront() {
+    const suffix = state.laserMarks === "line" ? "-laser-front-lines.svg" : "-laser-front.svg";
+    PP.exporters.download(new Blob([PP.view2d.exportLaserFrontSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + suffix);
+  }
+  function exportLaserBack() {
+    PP.exporters.download(new Blob([PP.view2d.exportLaserBackSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-back.svg");
+  }
+  function buildLaserButtons(body) {
+    const wrap = document.createElement("div");
+    wrap.className = "btn-grid";
+    wrap.innerHTML = `
+      <button type="button" class="lx-front">Laser Front SVG <small>markings + charm inset</small></button>
+      <button type="button" class="lx-back">Laser Back SVG <small>outline + finger hole</small></button>`;
+    wrap.querySelector(".lx-front").addEventListener("click", exportLaserFront);
+    wrap.querySelector(".lx-back").addEventListener("click", exportLaserBack);
+    const key = document.createElement("p");
+    key.className = "hint";
+    key.innerHTML = `Colours: <b style="color:#ff6b6b">red</b> = outer cut, <b style="color:#6b8bff">blue</b> = inner cuts (charm inset, finger hole, cut-through features), black = engrave / score.`;
+    body.append(wrap, key);
+  }
+
   function buildExport(body) {
     body.innerHTML = `
       <div class="btn-grid">
@@ -532,8 +567,8 @@ window.PP = window.PP || {};
       </div>
       <button id="reset-all" class="link">Reset everything to defaults</button>`;
     body.querySelector("#ex-3mf").addEventListener("click", export3MF);
-    body.querySelector("#ex-laser-front").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportLaserFrontSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-front.svg"));
-    body.querySelector("#ex-laser-back").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportLaserBackSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-back.svg"));
+    body.querySelector("#ex-laser-front").addEventListener("click", exportLaserFront);
+    body.querySelector("#ex-laser-back").addEventListener("click", exportLaserBack);
     body.querySelector("#ex-stl").addEventListener("click", exportSTL);
     body.querySelector("#ex-svg").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + ".svg"));
     body.querySelector("#ex-png").addEventListener("click", () => {

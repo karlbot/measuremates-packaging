@@ -160,6 +160,28 @@ window.PP = window.PP || {};
     return d;
   };
 
+  // Open polylines (Clipper paths) -> SVG path data without closing segments.
+  G.linesToSvgD = (lines, prec) => {
+    prec = prec == null ? 3 : prec;
+    let d = "";
+    lines.forEach((p) => {
+      if (p.length < 2) return;
+      d += "M" + p.map((q) => (q.X / S).toFixed(prec) + " " + (q.Y / S).toFixed(prec)).join("L");
+    });
+    return d;
+  };
+
+  // Clip open polylines to a closed region (keeps the parts inside).
+  G.clipOpen = (lines, region) => {
+    if (!lines || !lines.length || !region || !region.length) return [];
+    const c = new C.Clipper();
+    c.AddPaths(lines, C.PolyType.ptSubject, false);
+    c.AddPaths(region, C.PolyType.ptClip, true);
+    const tree = new C.PolyTree();
+    c.Execute(C.ClipType.ctIntersection, tree, FT.nonzero, FT.nonzero);
+    return C.Clipper.OpenPathsFromPolyTree(tree);
+  };
+
   // Douglas-Peucker for [x,y] polylines (mm).
   G.simplifyLine = (pts, tol) => {
     if (pts.length < 3) return pts;

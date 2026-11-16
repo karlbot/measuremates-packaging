@@ -44,6 +44,53 @@ window.PP = window.PP || {};
     return G.normalize(G.toPaths(polys));
   }
 
+  // ---------- single-stroke digits (for laser scoring) ----------
+  // Outline fonts can't be cut as single lines, so the ruler numbers use this built-in
+  // single-stroke digit set: polylines on a 0.6 × 1 cell, y-up, baseline at 0.
+  const SL_W = 0.6, SL_GAP = 0.25;
+  const SL_DIGITS = (() => {
+    const arc = (cx, cy, rx, ry, a0, a1, n) => {
+      n = n || Math.max(6, Math.ceil(Math.abs(a1 - a0) / 12));
+      const out = [];
+      for (let i = 0; i <= n; i++) {
+        const a = ((a0 + ((a1 - a0) * i) / n) * Math.PI) / 180;
+        out.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+      }
+      return out;
+    };
+    const six = [arc(0.6, 0.3, 0.6, 0.7, 95, 180).concat(arc(0.3, 0.3, 0.3, 0.3, 180, 540, 30).slice(1))];
+    return {
+      0: [arc(0.3, 0.5, 0.3, 0.5, 90, 450, 32)],
+      1: [[[0.1, 0.78], [0.32, 1], [0.32, 0]]],
+      2: [arc(0.3, 0.72, 0.29, 0.28, 165, -35).concat([[0, 0], [0.6, 0]])],
+      3: [arc(0.29, 0.76, 0.26, 0.24, 155, -90).concat(arc(0.3, 0.27, 0.3, 0.25, 90, -155).slice(1))],
+      4: [[[0.46, 0], [0.46, 1], [0, 0.32], [0.6, 0.32]]],
+      5: [[[0.56, 1], [0.1, 1], [0.06, 0.56]].concat(arc(0.3, 0.33, 0.3, 0.33, 135, -145))],
+      6: six,
+      7: [[[0, 1], [0.6, 1], [0.18, 0]]],
+      8: [arc(0.3, 0.76, 0.24, 0.24, -90, 270, 24), arc(0.3, 0.27, 0.3, 0.27, 90, 450, 28)],
+      9: six.map((pl) => pl.map(([x, y]) => [SL_W - x, 1 - y])),
+    };
+  })();
+
+  // Single-line label centred at (px,py), digit height `height`, rotated by angleDeg. -> Clipper open paths
+  function placeLabelLines(label, px, py, height, angleDeg) {
+    const chars = String(label).split("");
+    const total = chars.length * SL_W + (chars.length - 1) * SL_GAP;
+    const a = (angleDeg * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const out = [];
+    chars.forEach((ch, i) => {
+      const g = SL_DIGITS[ch];
+      if (!g) return;
+      const ox = i * (SL_W + SL_GAP) - total / 2;
+      g.forEach((pl) => out.push(G.toPath(pl.map(([x, y]) => {
+        const lx = (ox + x) * height, ly = (y - 0.5) * height;
+        return [px + lx * ca - ly * sa, py + lx * sa + ly * ca];
+      }))));
+    });
+    return out;
+  }
+
   // Area centroid of a region (mm).
   function centroid(region) {
     let A = 0, X = 0, Y = 0;
@@ -83,6 +130,11 @@ window.PP = window.PP || {};
     const bx = px + e.n[0] * len, by = py + e.n[1] * len;
     const hx = (e.d[0] * w) / 2, hy = (e.d[1] * w) / 2;
     return G.toPath([[ax - hx, ay - hy], [bx - hx, by - hy], [bx + hx, by + hy], [ax + hx, ay + hy]]);
+  }
+  // Centerline of the same bar (single line), also starting outside the edge for a clean clip.
+  function barLine(e, t, len) {
+    const px = e.o[0] + e.d[0] * t, py = e.o[1] + e.d[1] * t;
+    return G.toPath([[px - e.n[0], py - e.n[1]], [px + e.n[0] * len, py + e.n[1] * len]]);
   }
 
   function segRect(x0, y0, x1, y1, w) {
@@ -159,7 +211,7 @@ window.PP = window.PP || {};
     }
 
     // ---------- wordmark ----------
-    let wordmark = [];
+    let wordmark = [], wordmarkLines = [];
     try {
       const key = [p.wmSource, p.wmSource === "svg" ? p.wmSvgText && p.wmSvgText.length + ":" + p.wmSvgName : "", p.wmSource === "text" ? p.wmText + p.wmFont + p.wmLetterSpacing + p.wmLineHeight + "@" + fontVersion : "", p.wmIgnoreLight].join("|");
       if (wmCache.key !== key) wmCache = { key, val: PP.wordmarkDrawing(p) };
@@ -169,16 +221,18 @@ window.PP = window.PP || {};
       const stroke = wmCache.val.stroke != null ? p.wmStroke : null;
       (dr.warnings || []).forEach((w) => (/^Ignored/.test(w) ? notes : warnings).push("Wordmark: " + w));
       const placeKey = [key, p.wmX, p.wmY, p.wmWidth, stroke, p.wmWeight, p.wmRot || 0].join("|");
-      if (wmCache.placeKey === placeKey) wordmark = wmCache.region;
+      if (wmCache.placeKey === placeKey) { wordmark = wmCache.region; wordmarkLines = wmCache.lines; }
       else {
         const b = PP.drawingBounds(dr);
         if (b) {
           // Width is the finished outer width; for the stroked original, account for the pen width.
           const centerW = stroke != null ? Math.max(1, p.wmWidth - stroke) : p.wmWidth;
           wordmark = PP.placeDrawing(dr, p.wmX, p.wmY, centerW, { strokeWidth: stroke, weight: p.wmWeight, rotation: p.wmRot || 0 });
+          wordmarkLines = G.toPaths(PP.placeDrawingLines(dr, p.wmX, p.wmY, centerW, { rotation: p.wmRot || 0 }));
         }
         wmCache.placeKey = placeKey;
         wmCache.region = wordmark;
+        wmCache.lines = wordmarkLines;
       }
     } catch (e) {
       warnings.push("Wordmark error: " + e.message);
@@ -186,7 +240,8 @@ window.PP = window.PP || {};
 
     // ---------- ruler ticks & numbers ----------
     const E = edges(W, H, p.labelScheme);
-    const minorBars = [], majorBars = [], labelRegions = [];
+    const minorBars = [], majorBars = [], labels = [];
+    const minorLines = [], majorLines = [];
     const unit = p.rulerUnits === "cm" ? 10 : 25.4;
     const sub = p.rulerUnits === "cm" ? 10 : p.rulerSub;
     const step = unit / sub;
@@ -198,13 +253,16 @@ window.PP = window.PP || {};
       for (let i = 1; i * step < e.L - 0.25; i++) {
         const t = i * step;
         if (i % sub === 0) {
-          if (tickOn) majorBars.push(bar(e, t, p.majorLen, p.majorW));
-          if (numOn && font) {
+          if (tickOn) { majorBars.push(bar(e, t, p.majorLen, p.majorW)); majorLines.push(barLine(e, t, p.majorLen)); }
+          if (numOn) {
             const label = String(i / sub);
             const up = [-e.n[0], -e.n[1]];
             const ang = p.numRotate ? (Math.atan2(up[1], up[0]) * 180) / Math.PI - 90 : 0;
             const px = e.o[0] + e.d[0] * t + e.n[0] * p.numInset, py = e.o[1] + e.d[1] * t + e.n[1] * p.numInset;
-            labelRegions.push(placeLabel(font, p.numFont, label, px, py, p.numHeight, ang));
+            labels.push({
+              r: font ? placeLabel(font, p.numFont, label, px, py, p.numHeight, ang) : null,
+              l: placeLabelLines(label, px, py, p.numHeight, ang),
+            });
           }
         } else if (tickOn) {
           let len;
@@ -214,6 +272,7 @@ window.PP = window.PP || {};
           else if (sub === 16 && i % 2 === 1) len = p.tickLen1 * 0.65;
           else len = p.tickLen1;
           minorBars.push(bar(e, t, len, p.minorW));
+          minorLines.push(barLine(e, t, len));
         }
       }
     });
@@ -223,16 +282,19 @@ window.PP = window.PP || {};
     // Numbers: grow/shrink weight, optionally hide ones colliding with wordmark or pocket.
     const blockers = G.union(G.offset(wordmark, 0.6), G.offset(pocket, 0.6));
     let hidden = 0;
-    const keptLabels = [];
-    labelRegions.forEach((r) => {
-      let rr = p.numWeight ? G.offset(r, p.numWeight) : r;
-      if (p.numAutoHide && blockers.length && G.area(G.inter(rr, blockers)) > 0.01) { hidden++; return; }
-      keptLabels.push(rr);
+    const keptLabels = [], keptLabelLines = [];
+    labels.forEach(({ r, l }) => {
+      const rr = r ? (p.numWeight ? G.offset(r, p.numWeight) : r) : null;
+      const probe = rr || G.strokeOpen(l, 0.3, "round");
+      if (p.numAutoHide && blockers.length && G.area(G.inter(probe, blockers)) > 0.01) { hidden++; return; }
+      if (rr) keptLabels.push(rr);
+      keptLabelLines.push(...l);
     });
     let numbers = G.inter(G.unionAll(keptLabels), card);
 
     // ---------- frame (crop) marks around the charm box ----------
     let frame = [];
+    const frameLines = [];
     if (p.frameOn) {
       const x0 = p.boxX, y0 = p.boxY, x1 = p.boxX + p.boxW, y1 = p.boxY + p.boxH;
       const g = p.frameGap, L = p.frameLen, w = p.frameW;
@@ -240,6 +302,8 @@ window.PP = window.PP || {};
       [[x0, y0, -1, -1], [x1, y0, 1, -1], [x0, y1, -1, 1], [x1, y1, 1, 1]].forEach(([cx, cy, sx, sy]) => {
         segs.push(segRect(cx + sx * g, cy, cx + sx * (g + L), cy, w));
         segs.push(segRect(cx, cy + sy * g, cx, cy + sy * (g + L), w));
+        frameLines.push(G.toPath([[cx + sx * g, cy], [cx + sx * (g + L), cy]]));
+        frameLines.push(G.toPath([[cx, cy + sy * g], [cx, cy + sy * (g + L)]]));
       });
       frame = G.inter(G.normalize(segs), card);
     }
@@ -247,6 +311,14 @@ window.PP = window.PP || {};
     return {
       W, H, card, pocket, pushHole, charmSolid, charmOutline, charmSlots, charmBounds,
       groups: { wordmark, numbers, frame, major, minor },
+      // Single-line (centerline) versions of each feature, for laser scoring.
+      lines: {
+        wordmark: G.clipOpen(wordmarkLines, card),
+        numbers: G.clipOpen(keptLabelLines, card),
+        frame: G.clipOpen(frameLines, card),
+        major: G.clipOpen(majorLines, card),
+        minor: G.clipOpen(minorLines, card),
+      },
       wordmarkBounds: G.bounds(wordmark),
       hiddenLabels: hidden,
       warnings,

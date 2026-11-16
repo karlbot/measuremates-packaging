@@ -305,4 +305,29 @@ window.PP = window.PP || {};
     if (opt.weight) region = G.offset(region, opt.weight);
     return region;
   };
+
+  // Same placement as placeDrawing, but returns single-line paths ([[x,y]...] in mm) for laser
+  // scoring: stroke centerlines as-is, filled shapes as their outlines (closed loops repeat the
+  // first point so every path can be written as an open polyline).
+  PP.placeDrawingLines = function (dr, cx, cy, W, opt) {
+    opt = opt || {};
+    const b = PP.drawingBounds(dr);
+    if (!b || b.w <= 0) return [];
+    const s = W / b.w;
+    const a = ((opt.rotation || 0) * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const map = ([x, y]) => {
+      const dx = (x - b.cx) * s, dy = -(y - b.cy) * s;
+      return [cx + dx * ca - dy * sa, cy + dx * sa + dy * ca];
+    };
+    const out = [];
+    const add = (sub, closed) => {
+      if (sub.pts.length < 2) return;
+      const pts = sub.pts.map(map);
+      if (closed) pts.push(pts[0]);
+      out.push(pts);
+    };
+    dr.strokes.forEach((st) => st.subs.forEach((q) => add(q, q.closed)));
+    dr.fills.forEach((f) => f.subs.forEach((q) => add(q, true)));
+    return out;
+  };
 })();

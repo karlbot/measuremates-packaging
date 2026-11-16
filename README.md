@@ -42,6 +42,7 @@ This repository is pre-configured for Cloudflare Git continuous deployment:
 - **Laser Front SVG & Laser Back SVG.** Two 1:1 `mm`-scaled SVGs for laser-cutting a two-layer card:
   - **Laser Front SVG (`*-laser-front.svg`):** Outer card cut (`#ff0000`), charm pocket inset cut (`#0000ff`), and all markings (`#000000` fills in `#markings`) clipped outside the charm inset.
   - **Laser Back SVG (`*-laser-back.svg`):** Just the outer card shape outline (`#ff0000`) and the finger push-out hole (`#0000ff`).
+  - **Laser cutting → Markings:** *Filled (engrave)* exports markings as filled shapes; *Single line (score)* exports every tick, frame mark, number and the wordmark as one centerline (`#000000` hairlines in `#score`) for fast vector scoring. Numbers use a built-in single-stroke digit font; the original wordmark uses its pen centerlines; text/SVG-fill wordmarks fall back to their outlines. Features set to *Cut through* go to the blue cut layer. *Preview laser paths in the 2D view* shows exactly what will be exported.
 - **STLs (.zip).** One STL per colour, all sharing the same origin.
 - **2D artwork SVG**, a **preview PNG**, and **settings JSON** (save/load). Settings also auto-save in the browser.
 
