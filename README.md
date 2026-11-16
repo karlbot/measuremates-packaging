@@ -9,6 +9,12 @@ A browser tool for designing the 3D-printed backing card that holds the laser-cu
 Double-click **`index.html`**. It runs straight from the folder over `file://`, with no
 server, build step or internet connection. All libraries and fonts are in `vendor/` and `assets/`.
 
+### Deploy on Cloudflare (Workers or Pages CD)
+
+This repository is pre-configured for Cloudflare Git continuous deployment:
+- **Cloudflare Workers (Static Assets):** Uses `wrangler.jsonc` and `.assetsignore` out of the box (default deploy command: `npx wrangler deploy`).
+- **Cloudflare Pages:** Set **Build command** to empty (or `npm run build`) and **Build output directory** to `/`.
+
 ## What you can change
 
 | Area | Controls |

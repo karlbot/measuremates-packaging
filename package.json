@@ -1,0 +1,9 @@
+{
+  "name": "measuremates-packaging",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Parametric 3D-printed & laser-cut charm packaging design tool",
+  "scripts": {
+    "build": "echo 'Static site ready — no build step required'"
+  }
+}
