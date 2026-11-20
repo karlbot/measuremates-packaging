@@ -9,7 +9,7 @@ window.PP = window.PP || {};
     cardW: 76.2, cardH: 101.6, cardT: 2.0, cardR: 2.0,
     bevelW: 0, bevelH: 0.6, bevelSides: "top",
     // Charm & pocket
-    charmUnits: "auto", charmT: 1.0, clearance: 0.12, pocketDepth: 0.8,
+    charmUnits: "auto", charmT: 1.0, clearance: 0.12, pocketFill: 0.6, pocketDepth: 0.8,
     charmDX: 0, charmDY: 0, charmRot: 0, notch: "none", notchR: 4.5, charmLineW: 0.15,
     pushHole: "circle", pushD: 8, pushLen: 14, pushLedge: 2.5, pushDX: 0, pushDY: 0,
     charmDxfText: null, charmDxfName: null,
@@ -126,6 +126,7 @@ window.PP = window.PP || {};
       { k: "charmT", label: "Charm thickness", type: "num", unit: "mm", min: 0.3, max: 4, step: 0.05 },
       { k: "pocketDepth", label: "Pocket depth", type: "num", unit: "mm", min: 0.2, max: 4, step: 0.05 },
       { k: "clearance", label: "Clearance (per side)", type: "num", unit: "mm", min: -0.3, max: 0.6, step: 0.01, help: "Negative = pocket smaller than the charm for a tight press fit." },
+      { k: "pocketFill", label: "Fill slits narrower than", type: "num", unit: "mm", min: 0, max: 3, step: 0.05, help: "Ignores narrow gaps cut into the charm outline (between segments, ruler notches) so the pocket has no unprintable hairline ribs. 0 = follow the outline exactly." },
       { k: "charmDX", label: "Offset X", type: "num", unit: "mm", min: -60, max: 60, step: 0.1 },
       { k: "charmDY", label: "Offset Y", type: "num", unit: "mm", min: -60, max: 60, step: 0.1, help: "Relative to the frame box (bottom-centre). Drag the charm in 2D." },
       { k: "charmRot", label: "Rotation", type: "num", unit: "°", min: -180, max: 180, step: 1 },

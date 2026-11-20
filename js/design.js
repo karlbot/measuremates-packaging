@@ -185,6 +185,9 @@ window.PP = window.PP || {};
       charmSlots = lines.length ? G.strokeOpen(lines, p.charmLineW, "round") : [];
       charmBounds = G.bounds(charmOutline);
       pocket = G.offset(charmOutline, p.clearance);
+      // Slits cut in from the charm's edge (gaps between segments, ruler notches) would leave
+      // hairline ribs standing up in the pocket that can't print. Close gaps narrower than pocketFill.
+      if (p.pocketFill > 0) pocket = G.offset(G.offset(pocket, p.pocketFill / 2), -p.pocketFill / 2);
       if (p.notch && p.notch !== "none") {
         const pb = G.bounds(pocket);
         const cx = (pb.x0 + pb.x1) / 2, cy = (pb.y0 + pb.y1) / 2;
@@ -204,8 +207,11 @@ window.PP = window.PP || {};
           pushHole = G.strokeOpen([G.toPath([[cx, cy - L / 2], [cx, cy + L / 2]])], p.pushD, "round");
         } else if (p.pushHole === "window") pushHole = G.offset(charmOutline, -p.pushLedge);
         pushHole = G.inter(pushHole, pocket);
-        // The hole must stay inside the charm with a ledge left to rest on.
-        const support = G.offset(charmOutline, -0.8);
+        // The hole must stay inside the charm with a ledge left to rest on. Hairline slits cut in
+        // from the edge (e.g. between segments) aren't edges the charm could fall through, so close
+        // them first (morphological closing) and measure against the real outline.
+        const solidOutline = G.offset(G.offset(charmOutline, 0.5), -0.5);
+        const support = G.offset(solidOutline, -0.8);
         if (G.area(G.diff(pushHole, support)) > 0.05) warnings.push("Push-out hole reaches within 0.8 mm of the charm's edge - the charm may fall through or rock.");
       }
     }
