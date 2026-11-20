@@ -64,6 +64,14 @@ window.PP = window.PP || {};
   // Morphological opening: removes every part narrower than w.
   G.opening = (region, w) => (w > 0 ? G.offset(G.offset(region, -w / 2), w / 2) : region);
 
+  // Drop interior loops (holes) and zero-area crumbs, keeping only outer boundaries. Clipper outputs
+  // outers with positive orientation and holes negative.
+  G.fillHoles = (region, minAreaMM2) => {
+    if (!region || !region.length) return [];
+    const min = (minAreaMM2 == null ? 0.005 : minAreaMM2) * S * S;
+    return G.normalize(region.filter((q) => C.Clipper.Orientation(q) && Math.abs(C.Clipper.Area(q)) >= min));
+  };
+
   G.area = (region) => region.reduce((s, p) => s + C.Clipper.Area(p), 0) / (S * S);
 
   G.bounds = (region) => {

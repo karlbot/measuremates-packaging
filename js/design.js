@@ -187,7 +187,10 @@ window.PP = window.PP || {};
       pocket = G.offset(charmOutline, p.clearance);
       // Slits cut in from the charm's edge (gaps between segments, ruler notches) would leave
       // hairline ribs standing up in the pocket that can't print. Close gaps narrower than pocketFill.
-      if (p.pocketFill > 0) pocket = G.offset(G.offset(pocket, p.pocketFill / 2), -p.pocketFill / 2);
+      if (p.pocketFill > 0) pocket = G.union(G.offset(G.offset(pocket, p.pocketFill / 2), -p.pocketFill / 2), pocket); // union: never trim the true outline (round-join arc tolerance)
+      // Keep only the outer boundary: closing a slit's narrow mouth can strand its wider inner end
+      // as an island loop, which would print as a post in the pocket and notch the finger hole.
+      pocket = G.fillHoles(pocket);
       if (p.notch && p.notch !== "none") {
         const pb = G.bounds(pocket);
         const cx = (pb.x0 + pb.x1) / 2, cy = (pb.y0 + pb.y1) / 2;
@@ -205,8 +208,9 @@ window.PP = window.PP || {};
         else if (p.pushHole === "slot") {
           const L = Math.max(0, p.pushLen - p.pushD);
           pushHole = G.strokeOpen([G.toPath([[cx, cy - L / 2], [cx, cy + L / 2]])], p.pushD, "round");
-        } else if (p.pushHole === "window") pushHole = G.offset(charmOutline, -p.pushLedge);
-        pushHole = G.inter(pushHole, pocket);
+        } else if (p.pushHole === "window") pushHole = G.offset(G.fillHoles(G.offset(G.offset(charmOutline, 0.5), -0.5)), -p.pushLedge);
+        // Clip to the pocket with slits closed, so a slit crossing the hole doesn't split it.
+        pushHole = G.inter(pushHole, G.fillHoles(G.offset(G.offset(pocket, 0.5), -0.5)));
         // The hole must stay inside the charm with a ledge left to rest on. Hairline slits cut in
         // from the edge (e.g. between segments) aren't edges the charm could fall through, so close
         // them first (morphological closing) and measure against the real outline.
