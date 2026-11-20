@@ -172,6 +172,14 @@ button.preset small { color: var(--muted); font-size: 10.5px; }
 .preset-del:hover { background: rgba(255, 90, 90, 0.2); color: var(--warn); }
 .preset-empty { grid-column: 1 / -1; padding: 2px 0; }
 
+/* per-edge number table */
+.num-edges { display: grid; grid-template-columns: 74px 92px 1fr 18px; gap: 5px 5px; align-items: center; }
+.num-edges .sh { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.num-edges select, .num-edges input[type="text"] { padding: 4px 5px; font-size: 12px; }
+.num-edges select:disabled, .num-edges input:disabled { opacity: 0.4; }
+.num-edges .ne-name { font-size: 12px; gap: 6px; }
+.num-edges > .reset-btn[hidden] { display: inline-grid !important; visibility: hidden; pointer-events: none; }
+
 /* styles table */
 .styles { display: grid; grid-template-columns: 76px 1fr 82px 46px 18px; gap: 5px 4px; align-items: center; }
 .styles > .reset-btn[hidden] { display: inline-grid !important; visibility: hidden; pointer-events: none; }

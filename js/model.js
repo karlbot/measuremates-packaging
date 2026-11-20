@@ -144,7 +144,8 @@ window.PP = window.PP || {};
       if (pocketDepth < p.charmT - 0.001) notes.push(`Charm stands ${(p.charmT - pocketDepth).toFixed(2)} mm proud of the card surface.`);
       else if (pocketDepth > p.charmT + 0.001) notes.push(`Charm sits ${(pocketDepth - p.charmT).toFixed(2)} mm below the card surface.`);
       else notes.push("Charm sits flush with the card surface.");
-      if (p.clearance < 0.05) warnings.push("Pocket clearance below 0.05 mm - the charm may not fit after printing.");
+      if (p.clearance < 0) notes.push(`Press fit: pocket is ${Math.abs(p.clearance).toFixed(2)} mm per side smaller than the charm. Print a test - very tight fits can crack thin walls or need the charm pressed in.`);
+      else if (p.clearance < 0.05) warnings.push("Pocket clearance below 0.05 mm - the charm may not fit after printing.");
     }
 
     const recesses = []; // {region, zb}

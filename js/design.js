@@ -250,20 +250,12 @@ window.PP = window.PP || {};
     ["top", "right", "bottom", "left"].forEach((side) => {
       const e = E[side];
       const tickOn = p["tick_" + side], numOn = p["num_" + side];
+      const majors = []; // {i, t} for every inch/cm mark on this edge
       for (let i = 1; i * step < e.L - 0.25; i++) {
         const t = i * step;
         if (i % sub === 0) {
           if (tickOn) { majorBars.push(bar(e, t, p.majorLen, p.majorW)); majorLines.push(barLine(e, t, p.majorLen)); }
-          if (numOn) {
-            const label = String(i / sub);
-            const up = [-e.n[0], -e.n[1]];
-            const ang = p.numRotate ? (Math.atan2(up[1], up[0]) * 180) / Math.PI - 90 : 0;
-            const px = e.o[0] + e.d[0] * t + e.n[0] * p.numInset, py = e.o[1] + e.d[1] * t + e.n[1] * p.numInset;
-            labels.push({
-              r: font ? placeLabel(font, p.numFont, label, px, py, p.numHeight, ang) : null,
-              l: placeLabelLines(label, px, py, p.numHeight, ang),
-            });
-          }
+          majors.push({ i, t });
         } else if (tickOn) {
           let len;
           if (p.rulerUnits === "cm") len = i % 5 === 0 ? p.tickLen3 : p.tickLen1;
@@ -275,6 +267,30 @@ window.PP = window.PP || {};
           minorLines.push(barLine(e, t, len));
         }
       }
+      if (!numOn || !majors.length) return;
+      // Reading order: left->right on top/bottom, bottom->top on left/right.
+      const horiz = side === "top" || side === "bottom";
+      const pos = (m) => (horiz ? e.o[0] + e.d[0] * m.t : e.o[1] + e.d[1] * m.t);
+      const reading = majors.slice().sort((a, b) => pos(a) - pos(b));
+      const n = reading.length;
+      const order = p["numOrder_" + side] || "auto";
+      const custom = String(p["numLabels_" + side] || "").trim();
+      const tokens = custom ? custom.split(",").map((s) => s.trim()) : [];
+      reading.forEach((m, r) => {
+        let label;
+        if (r < tokens.length) label = tokens[r]; // explicit label for this position ("" or "-" hides it)
+        else if (order === "asc") label = String(r + 1);
+        else if (order === "desc") label = String(n - r);
+        else label = String(m.i / sub); // auto: follows the Counting setting
+        if (!label || label === "-" || label.toLowerCase() === "x") return;
+        const up = [-e.n[0], -e.n[1]];
+        const ang = p.numRotate ? (Math.atan2(up[1], up[0]) * 180) / Math.PI - 90 : 0;
+        const px = e.o[0] + e.d[0] * m.t + e.n[0] * p.numInset, py = e.o[1] + e.d[1] * m.t + e.n[1] * p.numInset;
+        labels.push({
+          r: font ? placeLabel(font, p.numFont, label, px, py, p.numHeight, ang) : null,
+          l: placeLabelLines(label, px, py, p.numHeight, ang),
+        });
+      });
     });
     let minor = G.inter(G.normalize(minorBars), card);
     let major = G.inter(G.normalize(majorBars), card);

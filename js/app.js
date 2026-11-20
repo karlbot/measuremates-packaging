@@ -28,6 +28,8 @@ window.PP = window.PP || {};
     // Numbers
     numFont: "inter-600", numHeight: 2.44, numWeight: 0, numInset: 11.8, numRotate: false, numAutoHide: true,
     num_top: true, num_right: true, num_bottom: true, num_left: true,
+    numOrder_top: "auto", numOrder_right: "auto", numOrder_bottom: "auto", numOrder_left: "auto",
+    numLabels_top: "", numLabels_right: "", numLabels_bottom: "", numLabels_left: "",
     // Feature styles
     wordmarkMode: "inlay", wordmarkMat: "accent1", wordmarkDepth: 0.4,
     numbersMode: "inlay", numbersMat: "accent2", numbersDepth: 0.4,
@@ -101,11 +103,8 @@ window.PP = window.PP || {};
       { k: "_numFontUpload", label: "Upload number font", type: "file", accept: ".ttf,.otf,.woff", onFile: "numfont" },
       { k: "numHeight", label: "Digit height", type: "num", unit: "mm", min: 1, max: 10, step: 0.01 },
       { k: "numInset", label: "Distance from edge", type: "num", unit: "mm", min: 2, max: 30, step: 0.1 },
-      { k: "labelScheme", label: "Counting", type: "select", opts: [["clockwise", "Clockwise around card (original)"], ["standard", "From bottom-left"]] },
-      { k: "num_top", label: "Top", type: "check", inline: true },
-      { k: "num_right", label: "Right", type: "check", inline: true },
-      { k: "num_bottom", label: "Bottom", type: "check", inline: true },
-      { k: "num_left", label: "Left", type: "check", inline: true },
+      { k: "labelScheme", label: "Counting (when edge order is Auto)", type: "select", opts: [["clockwise", "Clockwise around card (original)"], ["standard", "From bottom-left"]] },
+      { k: "_numEdges", type: "numEdges" },
       { k: "numAutoHide", label: "Hide numbers that collide with the wordmark/pocket", type: "check" },
       { k: "numRotate", label: "Rotate to follow edge", type: "check" },
     ] },
@@ -126,7 +125,7 @@ window.PP = window.PP || {};
       { k: "charmUnits", label: "DXF units", type: "select", opts: [["auto", "Auto (from file)"], ["in", "Inches"], ["mm", "Millimetres"]] },
       { k: "charmT", label: "Charm thickness", type: "num", unit: "mm", min: 0.3, max: 4, step: 0.05 },
       { k: "pocketDepth", label: "Pocket depth", type: "num", unit: "mm", min: 0.2, max: 4, step: 0.05 },
-      { k: "clearance", label: "Clearance (per side)", type: "num", unit: "mm", min: 0, max: 0.6, step: 0.01 },
+      { k: "clearance", label: "Clearance (per side)", type: "num", unit: "mm", min: -0.3, max: 0.6, step: 0.01, help: "Negative = pocket smaller than the charm for a tight press fit." },
       { k: "charmDX", label: "Offset X", type: "num", unit: "mm", min: -60, max: 60, step: 0.1 },
       { k: "charmDY", label: "Offset Y", type: "num", unit: "mm", min: -60, max: 60, step: 0.1, help: "Relative to the frame box (bottom-centre). Drag the charm in 2D." },
       { k: "charmRot", label: "Rotation", type: "num", unit: "°", min: -180, max: 180, step: 1 },
@@ -265,6 +264,7 @@ window.PP = window.PP || {};
       else {
         let inlineRow = null;
         sec.fields.forEach((f) => {
+          if (f.type === "numEdges") { inlineRow = null; body.appendChild(buildNumEdges()); return; }
           const row = buildField(f);
           if (f.inline) {
             if (!inlineRow) { inlineRow = document.createElement("div"); inlineRow.className = "row inline-checks"; body.appendChild(inlineRow); }
@@ -483,6 +483,56 @@ window.PP = window.PP || {};
     };
   }
 
+  // Per-edge number controls: show/hide, reading order, and optional custom labels per position.
+  function buildNumEdges() {
+    const wrap = document.createElement("div");
+    wrap.className = "row";
+    const tbl = document.createElement("div");
+    tbl.className = "num-edges";
+    tbl.innerHTML = `<div class="sh">Edge</div><div class="sh">Order</div><div class="sh">Custom labels</div><div class="sh"></div>`;
+    const SIDES = [["top", "Top", "→"], ["bottom", "Bottom", "→"], ["left", "Left", "↑"], ["right", "Right", "↑"]];
+    SIDES.forEach(([side, label, arrow]) => {
+      const kOn = "num_" + side, kOrd = "numOrder_" + side, kLab = "numLabels_" + side;
+      const horiz = arrow === "→";
+      const name = document.createElement("label");
+      name.className = "chk ne-name";
+      name.innerHTML = `<input type="checkbox"><span>${label}</span>`;
+      const cb = name.querySelector("input");
+      cb.setAttribute("aria-label", `Show numbers on ${label.toLowerCase()} edge`);
+      const ord = document.createElement("select");
+      ord.setAttribute("aria-label", `${label} number order`);
+      ord.innerHTML = [
+        ["auto", "Auto"],
+        ["asc", horiz ? "1, 2, 3 →" : "1, 2, 3 ↑"],
+        ["desc", horiz ? "← 1, 2, 3" : "↓ 1, 2, 3"],
+      ].map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      ord.title = horiz ? "Reading order left → right" : "Reading order bottom → top";
+      const lab = document.createElement("input");
+      lab.type = "text";
+      lab.placeholder = "e.g. 1,2 or 1,-,3";
+      lab.spellcheck = false;
+      lab.setAttribute("aria-label", `${label} custom labels, ${horiz ? "left to right" : "bottom to top"}, comma separated`);
+      lab.title = `Labels for each inch mark ${horiz ? "left → right" : "bottom → top"}, comma separated. Use - to hide one. Blank = use Order.`;
+      const rbtn = makeResetBtn([kOn, kOrd, kLab], `${label} numbers`);
+      cb.addEventListener("change", () => { state[kOn] = cb.checked; sync(); changed(kOn); });
+      ord.addEventListener("change", () => { state[kOrd] = ord.value; changed(kOrd); });
+      lab.addEventListener("input", () => { state[kLab] = lab.value; changed(kLab); });
+      const sync = () => {
+        cb.checked = !!state[kOn];
+        ord.value = state[kOrd] || "auto";
+        if (document.activeElement !== lab) lab.value = state[kLab] || "";
+        ord.disabled = lab.disabled = !state[kOn];
+      };
+      controls.push({ f: { k: kOn }, set: sync, resetKeys: [kOn, kOrd, kLab], rbtn });
+      tbl.append(name, ord, lab, rbtn);
+    });
+    const hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = "Order: Auto follows Counting. Custom labels override each inch mark in reading order (left → right, bottom → top); use - to hide one, e.g. \"-,2\". Single-line laser mode draws digits only.";
+    wrap.append(tbl, hint);
+    return wrap;
+  }
+
   function buildStyles(body) {
     const tbl = document.createElement("div");
     tbl.className = "styles";
@@ -607,23 +657,40 @@ window.PP = window.PP || {};
     });
   }
 
+  // Read an uploaded file with feedback. Cloud-synced files (Google Drive / iCloud "online only")
+  // can hang or fail while the OS fetches them; without this the upload silently did nothing.
+  function readFile(file, asText) {
+    const label = file.name;
+    const slow = setTimeout(() => toast(`Reading ${label}… (waiting for the file - if it's in Google Drive/iCloud, make it available offline)`), 800);
+    const read = asText ? file.text() : file.arrayBuffer();
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("timed out after 30 s - the file may be online-only in Google Drive/iCloud. Download it or copy it to a local folder and try again.")), 30000));
+    return Promise.race([read, timeout])
+      .finally(() => clearTimeout(slow))
+      .catch((e) => {
+        toast(`Could not read ${label}: ${e && e.message ? e.message : e}`, true);
+        throw e;
+      });
+  }
+
   function handleFile(kind, file) {
+    const ignore = () => {}; // errors already reported by readFile
     if (kind === "dxf") {
-      file.text().then((t) => {
-        try { PP.buildCharm(PP.parseDXF(t, state.charmUnits === "auto" ? null : state.charmUnits)); }
+      readFile(file, true).then((t) => {
+        let charm;
+        try { charm = PP.buildCharm(PP.parseDXF(t, state.charmUnits === "auto" ? null : state.charmUnits)); }
         catch (e) { toast("Could not read DXF: " + e.message, true); return; }
         state.charmDxfText = t; state.charmDxfName = file.name; syncControls(); changed("dxf");
-        toast("Loaded charm " + file.name);
-      });
+        toast(`Loaded charm ${file.name} (${charm.w.toFixed(2)} × ${charm.h.toFixed(2)} mm)`);
+      }, ignore);
     } else if (kind === "svg") {
-      file.text().then((t) => {
+      readFile(file, true).then((t) => {
         try { PP.importSVG(t, { ignoreLight: state.wmIgnoreLight }); }
         catch (e) { toast("Could not read SVG: " + e.message, true); return; }
         state.wmSvgText = t; state.wmSvgName = file.name; state.wmSource = "svg"; syncControls(); changed("svg");
         toast("Loaded wordmark " + file.name);
-      });
+      }, ignore);
     } else if (kind === "font" || kind === "numfont") {
-      file.arrayBuffer().then((buf) => {
+      readFile(file, false).then((buf) => {
         try { opentype.parse(buf); } catch (e) { toast("Unsupported font (use TTF, OTF or WOFF): " + e.message, true); return; }
         let bin = "";
         const u8 = new Uint8Array(buf);
@@ -634,7 +701,7 @@ window.PP = window.PP || {};
         if (kind === "numfont") state.numFont = id; else state.wmFont = id;
         syncControls(); changed("font");
         toast("Loaded font " + file.name);
-      });
+      }, ignore);
     }
   }
 
