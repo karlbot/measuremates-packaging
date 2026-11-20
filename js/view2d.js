@@ -154,6 +154,7 @@ window.PP = window.PP || {};
       const hair = { fill: "none", "vector-effect": "non-scaling-stroke", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" };
       L.fills.forEach((f) => el("path", { d: f.d, fill: C.engrave, "fill-opacity": 0.85 }, lg));
       L.lines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.score }, hair), lg));
+      L.outlines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: p.laserWmOutlineCol || "#00a651" }, hair), lg));
       L.cuts.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.cut }, hair), lg));
       if (L.inset) el("path", Object.assign({ d: L.inset, stroke: C.cut }, hair), lg);
       el("path", Object.assign({ d: L.outline, stroke: C.outline }, hair), lg);
@@ -217,8 +218,14 @@ window.PP = window.PP || {};
         else fills.push({ id: gr.id, d: G.toSvgD(R, 4) });
       }
     });
+    // Optional: the wordmark's outline (boundary of the filled shape) as its own layer/colour.
+    const outlines = [];
+    if (p.laserWmOutline && p.wordmarkMode !== "off") {
+      const R = G.diff(design.groups.wordmark || [], design.pocket);
+      if (R.length) outlines.push({ id: "wordmark-outline", d: G.toSvgD(R, 4) });
+    }
     return {
-      fills, lines, cuts,
+      fills, lines, cuts, outlines,
       inset: design.pocket.length ? G.toSvgD(design.pocket, 4) : "",
       outline: G.toSvgD(design.card, 4),
     };
@@ -239,6 +246,11 @@ window.PP = window.PP || {};
     if (L.lines.length) {
       s += `<g id="score" fill="none" stroke="${C.score}" stroke-width="0.1" stroke-linecap="round" stroke-linejoin="round">\n`;
       L.lines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
+      s += `</g>\n`;
+    }
+    if (L.outlines.length) {
+      s += `<g id="wordmark-outlines" fill="none" stroke="${p.laserWmOutlineCol || "#00a651"}" stroke-width="0.1" stroke-linejoin="round">\n`;
+      L.outlines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
       s += `</g>\n`;
     }
     s += `<g id="cuts" fill="none" stroke-width="0.1">\n`;

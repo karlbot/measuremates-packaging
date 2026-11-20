@@ -43,7 +43,7 @@ window.PP = window.PP || {};
     nozzle: 0.4, layerH: 0.2, firstLayerH: 0.2, simSlicer: true, minFeaturePct: 25, minBeadPct: 85,
     layerLines: true, topFinish: "lines", showPlate: true, showCharm: true, showThin: true,
     // Laser cutting
-    laserMarks: "fill", laserPreview: false,
+    laserMarks: "fill", laserPreview: false, laserWmOutline: false, laserWmOutlineCol: "#00a651",
     customFonts: [],
   };
 
@@ -183,6 +183,8 @@ window.PP = window.PP || {};
       { k: "laserMarks", label: "Markings on the front sheet", type: "seg", opts: [["fill", "Filled (engrave)"], ["line", "Single line (score)"]],
         help: "Single line exports every tick, frame mark, number and the wordmark as one centerline - fast vector scoring. Numbers use a built-in single-stroke digit font; text/SVG-fill wordmarks fall back to their outlines." },
       { k: "laserPreview", label: "Preview laser paths in the 2D view", type: "check" },
+      { k: "laserWmOutline", label: "Also export the wordmark outline", type: "check", help: "Adds the wordmark's outer edge as its own layer in a separate colour (e.g. score the centreline, cut or engrave the outline)." },
+      { k: "laserWmOutlineCol", label: "Outline colour", type: "color", when: (p) => p.laserWmOutline },
     ], after: "laserButtons" },
     { id: "export", title: "Export & settings", open: true, custom: "export" },
   ];
