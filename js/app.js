@@ -43,25 +43,41 @@ window.PP = window.PP || {};
     nozzle: 0.4, layerH: 0.2, firstLayerH: 0.2, simSlicer: true, minFeaturePct: 25, minBeadPct: 85,
     layerLines: true, topFinish: "lines", showPlate: true, showCharm: true, showThin: true,
     // Laser cutting
-    laserMarks: "fill", laserPreview: false, laserWmOutline: false, laserWmOutlineCol: "#00a651",
+    laserMarks: "line", laserPreview: false, laserWmOutline: false, laserWmOutlineCol: "#00a651",
+    laserWmStyle: "outline", laserWmCut: "score2", laserWmCol: "#00a651", laserView: "chipboard",
     customFonts: [],
   };
 
+  const LASER_PRESETS = {
+    outlineScore: {
+      label: "Outline + score",
+      desc: "Wordmark outline, 1-line marks",
+      v: { laserMarks: "line", laserWmStyle: "outline", laserWmCut: "score2", wordmarkMode: "inlay", numbersMode: "inlay", frameMode: "inlay", majorMode: "inlay", minorMode: "inlay" },
+    },
+    outlineCut: {
+      label: "Cut-out wordmark",
+      desc: "Wordmark cut through",
+      v: { laserMarks: "line", laserWmStyle: "outline", laserWmCut: "cut", wordmarkMode: "inlay", numbersMode: "inlay", frameMode: "inlay", majorMode: "inlay", minorMode: "inlay" },
+    },
+    singleAll: {
+      label: "Single-line all",
+      desc: "Fast vector score",
+      v: { laserMarks: "line", laserWmStyle: "center", laserWmCut: "score", wordmarkMode: "inlay", numbersMode: "inlay", frameMode: "inlay", majorMode: "inlay", minorMode: "inlay" },
+    },
+    fillEngrave: {
+      label: "Filled engrave",
+      desc: "Raster engrave fills",
+      v: { laserMarks: "fill", laserWmStyle: "fill", laserWmCut: "score", wordmarkMode: "inlay", numbersMode: "inlay", frameMode: "inlay", majorMode: "inlay", minorMode: "inlay" },
+    },
+  };
   const WEIGHT_PRESETS = {
     original: { label: "Original artwork", v: { minorW: 0.163, majorW: 0.327, frameW: 0.327, numWeight: 0, wmWeight: 0, wmStroke: 2.126 } },
-    printable: { label: "Printable (0.4 nozzle)", v: { minorW: 0.42, majorW: 0.6, frameW: 0.6, numWeight: 0.06, wmWeight: 0, wmStroke: 2.126 } },
+    thin: { label: "Fine (0.2 mm)", v: { minorW: 0.22, majorW: 0.38, frameW: 0.38, numWeight: 0, wmWeight: 0, wmStroke: 1.4 } },
     bold: { label: "Bold", v: { minorW: 0.6, majorW: 0.9, frameW: 0.9, numWeight: 0.15, wmWeight: 0, wmStroke: 2.6 } },
   };
-  const STYLE_PRESETS = {
-    inlay: { label: "Colour inlay", desc: "Flush, multi-material", f: (g) => ({ Mode: "inlay", Mat: g === "wordmark" ? "accent1" : "accent2", Depth: 0.4 }) },
-    raised2: { label: "Raised 2-tone", desc: "One filament swap", f: () => ({ Mode: "emboss", Mat: "accent1", Depth: 0.4 }) },
-    emboss: { label: "Embossed", desc: "Single colour", f: () => ({ Mode: "emboss", Mat: "body", Depth: 0.4 }) },
-    deboss: { label: "Debossed", desc: "Single colour", f: () => ({ Mode: "deboss", Mat: "body", Depth: 0.6 }) },
-    cut: { label: "Cut-out", desc: "Through holes", f: (g) => ({ Mode: g === "wordmark" ? "inlay" : "cut", Mat: "accent1", Depth: 0.4 }) },
-  };
 
-  const MODE_OPTS = [["inlay", "Inlay (flush colour)"], ["emboss", "Emboss (raised)"], ["deboss", "Deboss (recessed)"], ["cut", "Cut through"], ["off", "Off"]];
-  const MAT_OPTS = [["accent1", "Accent 1"], ["accent2", "Accent 2"], ["body", "Body colour"]];
+  const LASER_FEAT_OPTS = [["inlay", "On (score/engrave)"], ["cut", "Cut through"], ["off", "Off"]];
+  const WM_FEAT_OPTS = [["inlay", "On"], ["off", "Off"]];
 
   const fontOptions = () => (PP.BUNDLED_FONTS || []).map((f) => [f.id, f.name]).concat((state.customFonts || []).map((f) => [f.id, f.name + " (uploaded)"]));
   // Ruler numbers: the original Inter plus the bundled monospace ("techy") fonts and any uploads.
@@ -74,16 +90,24 @@ window.PP = window.PP || {};
   const inchHint = (v) => (v / 25.4).toFixed(3) + " in";
 
   const SCHEMA = [
+    { id: "laser", title: "Laser cutting", open: true, fields: [
+      { k: "laserMarks", label: "Ruler, numbers & frame marks", type: "seg", opts: [["line", "Single line (score)"], ["fill", "Filled (engrave)"]],
+        help: "Single line exports ticks, frame marks and numbers as one centreline for fast vector scoring. Numbers use a built-in single-stroke digit font." },
+      { k: "laserWmStyle", label: "Wordmark paths", type: "select", opts: [
+        ["outline", "Outline only (no middle line)"],
+        ["center", "Middle line only"],
+        ["both", "Middle line + outline"],
+        ["fill", "Filled (engrave)"],
+      ], help: "Outline only traces the outer edge of the letters and omits the centreline." },
+      { k: "laserWmCut", label: "Wordmark cut type", type: "select", opts: [
+        ["score2", "Score (separate colour)"],
+        ["score", "Score (same black as ruler)"],
+        ["cut", "Cut through top sheet (blue)"],
+      ], when: (p) => p.laserWmStyle !== "fill" },
+      { k: "laserWmCol", label: "Wordmark line colour", type: "color", when: (p) => p.laserWmStyle !== "fill" && p.laserWmCut === "score2" },
+      { k: "_laserFeats", type: "laserFeats" },
+    ], after: "laserButtons" },
     { id: "presets", title: "Quick presets", open: true, custom: "presets" },
-    { id: "styles", title: "Feature styles", open: true, custom: "styles" },
-    { id: "weights", title: "Line weights", open: true, fields: [
-      { k: "minorW", label: "Minor tick width", type: "num", unit: "mm", min: 0.05, max: 1.5, step: 0.01 },
-      { k: "majorW", label: "Inch mark width", type: "num", unit: "mm", min: 0.05, max: 2, step: 0.01 },
-      { k: "frameW", label: "Frame mark width", type: "num", unit: "mm", min: 0.05, max: 2, step: 0.01 },
-      { k: "numWeight", label: "Number weight ±", type: "num", unit: "mm", min: -0.2, max: 0.4, step: 0.01, help: "Grows or thins the digit outlines." },
-      { k: "wmStroke", label: "Wordmark pen width", type: "num", unit: "mm", min: 0.4, max: 5, step: 0.01, when: (p) => p.wmSource === "original" },
-      { k: "wmWeight", label: "Wordmark weight ±", type: "num", unit: "mm", min: -0.5, max: 1, step: 0.01 },
-    ] },
     { id: "wordmark", title: "Wordmark", open: false, fields: [
       { k: "wmSource", label: "Source", type: "seg", opts: [["original", "Original"], ["text", "Text"], ["svg", "SVG file"]] },
       { k: "wmText", label: "Text", type: "textarea", when: (p) => p.wmSource === "text" },
@@ -93,13 +117,15 @@ window.PP = window.PP || {};
       { k: "wmLineHeight", label: "Line height", type: "num", unit: "×", min: 0.6, max: 2, step: 0.01, when: (p) => p.wmSource === "text" },
       { k: "_svgUpload", label: "SVG file", type: "file", accept: ".svg,image/svg+xml", when: (p) => p.wmSource === "svg", onFile: "svg", status: (p) => p.wmSvgName || "none loaded" },
       { k: "wmIgnoreLight", label: "Ignore white/background shapes", type: "check", when: (p) => p.wmSource === "svg" },
+      { k: "wmStroke", label: "Outline pen width", type: "num", unit: "mm", min: 0.4, max: 5, step: 0.01, when: (p) => p.wmSource === "original" },
+      { k: "wmWeight", label: "Outline weight ±", type: "num", unit: "mm", min: -0.5, max: 1, step: 0.01 },
       { k: "wmWidth", label: "Width", type: "num", unit: "mm", min: 5, max: 200, step: 0.1 },
       { k: "wmRot", label: "Rotation", type: "num", unit: "°", min: -180, max: 180, step: 0.5 },
       { k: "wmX", label: "Centre X", type: "num", unit: "mm", min: 0, max: 300, step: 0.1 },
-      { k: "wmY", label: "Centre Y", type: "num", unit: "mm", min: 0, max: 300, step: 0.1, help: "Tip: drag the wordmark in the 2D view." },
+      { k: "wmY", label: "Centre Y", type: "num", unit: "mm", min: 0, max: 300, step: 0.1, help: "Tip: drag the wordmark in the preview." },
     ] },
     { id: "numbers", title: "Numbers", open: false, fields: [
-      { k: "numFont", label: "Font", type: "select", opts: numFontOptions },
+      { k: "numFont", label: "Font (for filled engrave)", type: "select", opts: numFontOptions },
       { k: "_numFontUpload", label: "Upload number font", type: "file", accept: ".ttf,.otf,.woff", onFile: "numfont" },
       { k: "numHeight", label: "Digit height", type: "num", unit: "mm", min: 1, max: 10, step: 0.01 },
       { k: "numInset", label: "Distance from edge", type: "num", unit: "mm", min: 2, max: 30, step: 0.1 },
@@ -120,25 +146,22 @@ window.PP = window.PP || {};
       { k: "tick_bottom", label: "Bottom", type: "check", inline: true },
       { k: "tick_left", label: "Left", type: "check", inline: true },
     ] },
-    { id: "charm", title: "Charm & pocket", open: false, fields: [
+    { id: "charm", title: "Charm & pocket cut", open: false, fields: [
       { k: "_dxfUpload", label: "Charm DXF", type: "file", accept: ".dxf", onFile: "dxf", status: (p) => p.charmDxfName || PP.DEFAULT_DXF_NAME },
       { k: "charmUnits", label: "DXF units", type: "select", opts: [["auto", "Auto (from file)"], ["in", "Inches"], ["mm", "Millimetres"]] },
-      { k: "charmT", label: "Charm thickness", type: "num", unit: "mm", min: 0.3, max: 4, step: 0.05 },
-      { k: "pocketDepth", label: "Pocket depth", type: "num", unit: "mm", min: 0.2, max: 4, step: 0.05 },
-      { k: "clearance", label: "Clearance (per side)", type: "num", unit: "mm", min: -0.3, max: 0.6, step: 0.01, help: "Negative = pocket smaller than the charm for a tight press fit." },
-      { k: "pocketFill", label: "Fill slits narrower than", type: "num", unit: "mm", min: 0, max: 3, step: 0.05, help: "Ignores narrow gaps cut into the charm outline (between segments, ruler notches) so the pocket has no unprintable hairline ribs. 0 = follow the outline exactly." },
+      { k: "clearance", label: "Pocket clearance (per side)", type: "num", unit: "mm", min: -0.3, max: 0.6, step: 0.01, help: "Negative = pocket smaller than the charm for a tight press fit." },
+      { k: "pocketFill", label: "Fill slits narrower than", type: "num", unit: "mm", min: 0, max: 3, step: 0.05, help: "Ignores narrow gaps cut into the charm outline (between segments, ruler notches). 0 = follow the outline exactly." },
       { k: "charmDX", label: "Offset X", type: "num", unit: "mm", min: -60, max: 60, step: 0.1 },
-      { k: "charmDY", label: "Offset Y", type: "num", unit: "mm", min: -60, max: 60, step: 0.1, help: "Relative to the frame box (bottom-centre). Drag the charm in 2D." },
+      { k: "charmDY", label: "Offset Y", type: "num", unit: "mm", min: -60, max: 60, step: 0.1, help: "Relative to the frame box (bottom-centre). Drag the charm in the preview." },
       { k: "charmRot", label: "Rotation", type: "num", unit: "°", min: -180, max: 180, step: 1 },
       { k: "notch", label: "Finger notch", type: "select", opts: [["none", "None"], ["left", "Left"], ["right", "Right"], ["top", "Top"], ["bottom", "Bottom"], ["both", "Left + right"]] },
       { k: "notchR", label: "Notch radius", type: "num", unit: "mm", min: 1, max: 12, step: 0.1, when: (p) => p.notch !== "none" },
-      { k: "pushHole", label: "Push-out hole (through the pocket floor)", type: "select", opts: [["none", "None"], ["circle", "Round hole"], ["slot", "Slot"], ["window", "Window (follows charm, leaves a ledge)"]] },
+      { k: "pushHole", label: "Back push-out hole", type: "select", opts: [["none", "None"], ["circle", "Round hole"], ["slot", "Slot"], ["window", "Window (follows charm, leaves a ledge)"]] },
       { k: "pushD", label: "Hole diameter / slot width", type: "num", unit: "mm", min: 2, max: 25, step: 0.1, when: (p) => p.pushHole === "circle" || p.pushHole === "slot" },
       { k: "pushLen", label: "Slot length", type: "num", unit: "mm", min: 2, max: 40, step: 0.1, when: (p) => p.pushHole === "slot" },
-      { k: "pushLedge", label: "Ledge width", type: "num", unit: "mm", min: 0.8, max: 8, step: 0.1, when: (p) => p.pushHole === "window", help: "How much of the charm rests on the floor around the window." },
+      { k: "pushLedge", label: "Ledge width", type: "num", unit: "mm", min: 0.8, max: 8, step: 0.1, when: (p) => p.pushHole === "window", help: "How much of the charm rests on the back chipboard around the window." },
       { k: "pushDX", label: "Hole offset X", type: "num", unit: "mm", min: -15, max: 15, step: 0.1, when: (p) => p.pushHole === "circle" || p.pushHole === "slot" },
       { k: "pushDY", label: "Hole offset Y", type: "num", unit: "mm", min: -15, max: 15, step: 0.1, when: (p) => p.pushHole === "circle" || p.pushHole === "slot", help: "Offset from the centre of the charm." },
-      { k: "charmLineW", label: "Engraved line width (preview)", type: "num", unit: "mm", min: 0.02, max: 0.6, step: 0.01 },
     ] },
     { id: "frame", title: "Frame marks & box", open: false, fields: [
       { k: "frameOn", label: "Show frame marks", type: "check" },
@@ -149,56 +172,39 @@ window.PP = window.PP || {};
       { k: "boxW", label: "Box width", type: "num", unit: "mm", min: 2, max: 300, step: 0.1, hint: inchHint },
       { k: "boxH", label: "Box height", type: "num", unit: "mm", min: 2, max: 300, step: 0.1, hint: inchHint },
     ] },
+    { id: "weights", title: "Line weights (filled engrave)", open: false, fields: [
+      { k: "minorW", label: "Minor tick width", type: "num", unit: "mm", min: 0.05, max: 1.5, step: 0.01 },
+      { k: "majorW", label: "Inch mark width", type: "num", unit: "mm", min: 0.05, max: 2, step: 0.01 },
+      { k: "frameW", label: "Frame mark width", type: "num", unit: "mm", min: 0.05, max: 2, step: 0.01 },
+      { k: "numWeight", label: "Number weight ±", type: "num", unit: "mm", min: -0.2, max: 0.4, step: 0.01, help: "Grows or thins the digit outlines (filled mode)." },
+    ] },
     { id: "card", title: "Card", open: false, fields: [
       { k: "cardW", label: "Width", type: "num", unit: "mm", min: 20, max: 250, step: 0.1, hint: inchHint },
       { k: "cardH", label: "Height", type: "num", unit: "mm", min: 20, max: 250, step: 0.1, hint: inchHint },
-      { k: "cardT", label: "Thickness", type: "num", unit: "mm", min: 0.6, max: 8, step: 0.05 },
       { k: "cardR", label: "Corner radius", type: "num", unit: "mm", min: 0, max: 20, step: 0.1 },
-      { k: "bevelW", label: "Outer edge bevel", type: "num", unit: "mm", min: 0, max: 4, step: 0.05, help: "Chamfers the card's outer perimeter across layers (0 = off)." },
-      { k: "bevelH", label: "Bevel height", type: "num", unit: "mm", min: 0.2, max: 4, step: 0.05, when: (p) => p.bevelW > 0 },
-      { k: "bevelSides", label: "Bevel edges", type: "seg", opts: [["top", "Top"], ["bottom", "Bottom"], ["both", "Both"]], when: (p) => p.bevelW > 0 },
     ] },
-    { id: "colors", title: "Filament colours", open: true, fields: [
-      { k: "colBody", label: "Body", type: "color", trans: "transBody" },
-      { k: "colAccent1", label: "Accent 1", type: "color", trans: "transAccent1" },
-      { k: "colAccent2", label: "Accent 2", type: "color", trans: "transAccent2" },
-      { k: "transDist", label: "Translucent clarity", type: "num", unit: "mm", min: 0.3, max: 12, step: 0.1, when: (p) => p.transBody || p.transAccent1 || p.transAccent2, help: "How far light travels before taking on the full colour. Low = milky/saturated, high = clear." },
-      { k: "backlight", label: "Backlight view (hold up to a light)", type: "check" },
-      { k: "finish", label: "Filament finish", type: "select", opts: [["matte", "Matte PLA"], ["standard", "Basic PLA"], ["silk", "Silk PLA"], ["glossy", "Glossy PETG"]] },
-    ] },
-    { id: "printer", title: "Printer & preview", open: false, fields: [
-      { k: "nozzle", label: "Nozzle", type: "select", opts: [[0.2, "0.2 mm"], [0.25, "0.25 mm"], [0.4, "0.4 mm"], [0.6, "0.6 mm"], [0.8, "0.8 mm"]], num: true },
-      { k: "layerH", label: "Layer height", type: "num", unit: "mm", min: 0.04, max: 0.4, step: 0.01 },
-      { k: "firstLayerH", label: "First layer", type: "num", unit: "mm", min: 0.08, max: 0.4, step: 0.01 },
-      { k: "simSlicer", label: "Simulate slicer (thin-feature handling)", type: "check" },
-      { k: "minFeaturePct", label: "Min feature size", type: "num", unit: "% nozzle", min: 5, max: 100, step: 1, when: (p) => p.simSlicer },
-      { k: "minBeadPct", label: "Min line width", type: "num", unit: "% nozzle", min: 20, max: 120, step: 1, when: (p) => p.simSlicer },
-      { k: "layerLines", label: "Show layer lines & top infill", type: "check" },
-      { k: "topFinish", label: "Top surface", type: "select", opts: [["lines", "Top infill lines"], ["ironed", "Ironed"], ["textured", "Textured plate (printed face-down)"]] },
-      { k: "showPlate", label: "Show build plate", type: "check" },
-      { k: "showCharm", label: "Show charm", type: "check" },
-      { k: "showThin", label: "Highlight unprintable detail in 2D", type: "check" },
-    ] },
-    { id: "laser", title: "Laser cutting", open: false, fields: [
-      { k: "laserMarks", label: "Markings on the front sheet", type: "seg", opts: [["fill", "Filled (engrave)"], ["line", "Single line (score)"]],
-        help: "Single line exports every tick, frame mark, number and the wordmark as one centerline - fast vector scoring. Numbers use a built-in single-stroke digit font; text/SVG-fill wordmarks fall back to their outlines." },
-      { k: "laserPreview", label: "Preview laser paths in the 2D view", type: "check" },
-      { k: "laserWmOutline", label: "Also export the wordmark outline", type: "check", help: "Adds the wordmark's outer edge as its own layer in a separate colour (e.g. score the centreline, cut or engrave the outline)." },
-      { k: "laserWmOutlineCol", label: "Outline colour", type: "color", when: (p) => p.laserWmOutline },
-    ], after: "laserButtons" },
-    { id: "export", title: "Export & settings", open: true, custom: "export" },
+    { id: "export", title: "Export & settings", open: false, custom: "export" },
   ];
 
   let state = {};
   let charmCache = { key: null, charm: null, info: "" };
-  let lastDesign = null, lastModel = null;
+  let lastDesign = null;
   const $ = (s, r) => (r || document).querySelector(s);
 
   function loadState() {
     state = JSON.parse(JSON.stringify(DEFAULTS));
     try {
       const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-      if (s) Object.keys(DEFAULTS).forEach((k) => { if (k in s) state[k] = s[k]; });
+      if (s) {
+        Object.keys(DEFAULTS).forEach((k) => { if (k in s) state[k] = s[k]; });
+        // Migrate legacy boolean outline toggle into the new wordmark style/colour controls.
+        if (!("laserWmStyle" in s) && s.laserWmOutline) {
+          state.laserWmStyle = "both";
+          state.laserWmCut = "score2";
+          if (s.laserWmOutlineCol) state.laserWmCol = s.laserWmOutlineCol;
+        }
+        if (state.wordmarkMode && state.wordmarkMode !== "off") state.wordmarkMode = "inlay";
+      }
     } catch (e) { /* ignore */ }
   }
   function saveState() {
@@ -268,6 +274,7 @@ window.PP = window.PP || {};
         let inlineRow = null;
         sec.fields.forEach((f) => {
           if (f.type === "numEdges") { inlineRow = null; body.appendChild(buildNumEdges()); return; }
+          if (f.type === "laserFeats") { inlineRow = null; body.appendChild(buildLaserFeats()); return; }
           const row = buildField(f);
           if (f.inline) {
             if (!inlineRow) { inlineRow = document.createElement("div"); inlineRow.className = "row inline-checks"; body.appendChild(inlineRow); }
@@ -377,9 +384,9 @@ window.PP = window.PP || {};
 
   function buildPresets(body) {
     body.innerHTML = `
-      <div class="preset-label">Feature style</div>
+      <div class="preset-label">Laser presets</div>
       <div class="preset-grid" id="style-presets"></div>
-      <div class="preset-label">Line weights</div>
+      <div class="preset-label">Line weights (engrave / outline)</div>
       <div class="preset-grid" id="weight-presets"></div>
       <div class="preset-label">Saved presets (local)</div>
       <div class="preset-save-row">
@@ -388,14 +395,11 @@ window.PP = window.PP || {};
       </div>
       <div class="preset-grid" id="saved-presets"></div>`;
     const sp = body.querySelector("#style-presets");
-    Object.entries(STYLE_PRESETS).forEach(([k, pr]) => {
+    Object.entries(LASER_PRESETS).forEach(([k, pr]) => {
       const b = document.createElement("button");
       b.className = "preset";
       b.innerHTML = `<strong>${pr.label}</strong><small>${pr.desc}</small>`;
-      b.addEventListener("click", () => {
-        PP.GROUPS.forEach((g) => { const v = pr.f(g.id); state[g.id + "Mode"] = v.Mode; state[g.id + "Mat"] = v.Mat; state[g.id + "Depth"] = v.Depth; });
-        syncControls(); changed("preset");
-      });
+      b.addEventListener("click", () => { Object.assign(state, pr.v); syncControls(); changed("preset"); });
       sp.appendChild(b);
     });
     const wp = body.querySelector("#weight-presets");
@@ -461,7 +465,7 @@ window.PP = window.PP || {};
       const rawName = nameInp.value.trim() || `Preset ${list.length + 1}`;
       const snapshot = {};
       Object.keys(DEFAULTS).forEach((k) => { snapshot[k] = JSON.parse(JSON.stringify(state[k])); });
-      const desc = `${state.cardT}mm · ${state.wordmarkMode}${state.bevelW > 0 ? ` · ${state.bevelW}mm bevel` : ""}`;
+      const desc = `${state.laserMarks === "line" ? "score" : "engrave"} · wm:${state.laserWmStyle}`;
       const existing = list.find((p) => p.name.toLowerCase() === rawName.toLowerCase());
       if (existing) {
         existing.name = rawName;
@@ -536,97 +540,82 @@ window.PP = window.PP || {};
     return wrap;
   }
 
-  function buildStyles(body) {
+  function buildLaserFeats() {
+    const wrap = document.createElement("div");
+    wrap.className = "row";
     const tbl = document.createElement("div");
-    tbl.className = "styles";
-    tbl.innerHTML = `<div class="sh">Feature</div><div class="sh">Treatment</div><div class="sh">Colour</div><div class="sh">Depth</div><div class="sh"></div>`;
+    tbl.className = "laser-feats";
+    tbl.innerHTML = `<div class="sh">Feature</div><div class="sh">Laser action</div><div class="sh"></div>`;
     PP.GROUPS.forEach((g) => {
+      const k = g.id + "Mode";
       const name = document.createElement("div");
-      name.className = "sname";
+      name.className = "lname";
       name.textContent = g.label;
-      const mode = document.createElement("select");
-      mode.setAttribute("aria-label", g.label + " treatment");
-      mode.innerHTML = MODE_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
-      const mat = document.createElement("select");
-      mat.setAttribute("aria-label", g.label + " colour");
-      mat.innerHTML = MAT_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
-      const dep = document.createElement("input");
-      dep.type = "number"; dep.min = 0.04; dep.max = 4; dep.step = 0.05;
-      dep.setAttribute("aria-label", g.label + " depth or height");
-      const swatch = document.createElement("span");
-      swatch.className = "swatch";
-      const matWrap = document.createElement("div");
-      matWrap.className = "mat-wrap";
-      matWrap.append(swatch, mat);
-      const rKeys = [g.id + "Mode", g.id + "Mat", g.id + "Depth"];
-      const rbtn = makeResetBtn(rKeys, g.label + " style");
-      mode.addEventListener("change", () => { state[g.id + "Mode"] = mode.value; sync(); changed("styles"); });
-      mat.addEventListener("change", () => { state[g.id + "Mat"] = mat.value; sync(); changed("styles"); });
-      dep.addEventListener("input", () => { const v = parseFloat(dep.value); if (isFinite(v)) { state[g.id + "Depth"] = v; changed("styles"); } });
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label", g.label + " laser action");
+      const opts = g.id === "wordmark" ? WM_FEAT_OPTS : LASER_FEAT_OPTS;
+      sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      const rbtn = makeResetBtn([k], g.label);
+      sel.addEventListener("change", () => { state[k] = sel.value; changed("laserFeats"); });
       const sync = () => {
-        const m = state[g.id + "Mode"];
-        mode.value = m;
-        mat.value = state[g.id + "Mat"];
-        dep.value = state[g.id + "Depth"];
-        const colorable = m === "inlay" || m === "emboss";
-        mat.disabled = !colorable;
-        dep.disabled = m === "cut" || m === "off";
-        dep.title = m === "emboss" ? "Raised height (mm)" : m === "cut" ? "Cuts all the way through" : "Depth (mm)";
-        swatch.style.background = colorable ? state[{ accent1: "colAccent1", accent2: "colAccent2", body: "colBody" }[state[g.id + "Mat"]]] : "transparent";
-        swatch.classList.toggle("none", !colorable);
+        const cur = state[k];
+        if (g.id === "wordmark") sel.value = cur === "off" ? "off" : "inlay";
+        else sel.value = cur === "off" || cur === "cut" ? cur : "inlay";
       };
-      controls.push({ f: { k: g.id + "Mode" }, set: sync, resetKeys: rKeys, rbtn });
-      tbl.append(name, mode, matWrap, dep, rbtn);
+      controls.push({ f: { k }, set: sync, resetKeys: [k], rbtn });
+      tbl.append(name, sel, rbtn);
     });
-    body.appendChild(tbl);
-    const note = document.createElement("p");
-    note.className = "hint";
-    note.innerHTML = "Depth = inlay/deboss depth or emboss height, snapped to whole layers. Overlapping features: higher rows win.";
-    body.appendChild(note);
+    wrap.appendChild(tbl);
+    return wrap;
   }
 
+  function laserFrontFilename() {
+    return baseName() + (state.laserMarks === "line" ? "-laser-front-lines.svg" : "-laser-front.svg");
+  }
   function exportLaserFront() {
-    const suffix = state.laserMarks === "line" ? "-laser-front-lines.svg" : "-laser-front.svg";
-    PP.exporters.download(new Blob([PP.view2d.exportLaserFrontSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + suffix);
+    PP.exporters.download(new Blob([PP.view2d.exportLaserFrontSVG(lastDesign, null, state)], { type: "image/svg+xml" }), laserFrontFilename());
   }
   function exportLaserBack() {
-    PP.exporters.download(new Blob([PP.view2d.exportLaserBackSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + "-laser-back.svg");
+    PP.exporters.download(new Blob([PP.view2d.exportLaserBackSVG(lastDesign, null, state)], { type: "image/svg+xml" }), baseName() + "-laser-back.svg");
+  }
+  function exportLaserZip() {
+    const files = [
+      { name: laserFrontFilename(), data: PP.view2d.exportLaserFrontSVG(lastDesign, null, state) },
+      { name: baseName() + "-laser-back.svg", data: PP.view2d.exportLaserBackSVG(lastDesign, null, state) },
+    ];
+    PP.exporters.download(PP.exporters.zip(files), baseName() + "-laser-svgs.zip");
   }
   function buildLaserButtons(body) {
     const wrap = document.createElement("div");
     wrap.className = "btn-grid";
     wrap.innerHTML = `
-      <button type="button" class="lx-front">Laser Front SVG <small>markings + charm inset</small></button>
-      <button type="button" class="lx-back">Laser Back SVG <small>outline + finger hole</small></button>`;
+      <button type="button" class="lx-front primary">Front Laser SVG <small>markings + charm inset</small></button>
+      <button type="button" class="lx-back">Back Laser SVG <small>outline + finger hole</small></button>
+      <button type="button" class="lx-zip">Both SVGs (.zip) <small>front + back pair</small></button>`;
     wrap.querySelector(".lx-front").addEventListener("click", exportLaserFront);
     wrap.querySelector(".lx-back").addEventListener("click", exportLaserBack);
+    wrap.querySelector(".lx-zip").addEventListener("click", exportLaserZip);
     const key = document.createElement("p");
     key.className = "hint";
-    key.innerHTML = `Colours: <b style="color:#ff6b6b">red</b> = outer cut, <b style="color:#6b8bff">blue</b> = inner cuts (charm inset, finger hole, cut-through features), black = engrave / score.`;
+    key.innerHTML = `SVG colours: <b style="color:#ff6b6b">red</b> = outer card cut, <b style="color:#6b8bff">blue</b> = inner cuts (charm inset, finger hole, cut-throughs), black = score / engrave.`;
     body.append(wrap, key);
   }
 
   function buildExport(body) {
     body.innerHTML = `
       <div class="btn-grid">
-        <button id="ex-3mf" class="primary">Download 3MF <small>multi-colour, one object</small></button>
+        <button id="ex-laser-zip" class="primary">Download Both Laser SVGs (.zip) <small>2mm chipboard front + back</small></button>
         <button id="ex-laser-front">Laser Front SVG <small>markings + charm inset</small></button>
         <button id="ex-laser-back">Laser Back SVG <small>outline + finger hole</small></button>
-        <button id="ex-stl">STLs (.zip) <small>one per colour</small></button>
-        <button id="ex-svg">2D artwork SVG</button>
-        <button id="ex-png">Preview PNG</button>
-        <button id="ex-json">Save settings</button>
+        <button id="ex-svg">2D artwork SVG <small>full composite</small></button>
+        <button id="ex-json">Save settings <small>.json</small></button>
         <label class="btn-like">Load settings<input type="file" id="im-json" accept=".json,application/json" hidden></label>
       </div>
       <button id="reset-all" class="link">Reset everything to defaults</button>`;
-    body.querySelector("#ex-3mf").addEventListener("click", export3MF);
+    body.querySelector("#ex-laser-zip").addEventListener("click", exportLaserZip);
     body.querySelector("#ex-laser-front").addEventListener("click", exportLaserFront);
     body.querySelector("#ex-laser-back").addEventListener("click", exportLaserBack);
-    body.querySelector("#ex-stl").addEventListener("click", exportSTL);
-    body.querySelector("#ex-svg").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportSVG(lastDesign, lastModel, state)], { type: "image/svg+xml" }), baseName() + ".svg"));
-    body.querySelector("#ex-png").addEventListener("click", () => {
-      fetch(PP.view3d.snapshot()).then((r) => r.blob()).then((b) => PP.exporters.download(b, baseName() + "-preview.png"));
-    });
+    body.querySelector("#ex-svg").addEventListener("click", () => PP.exporters.download(new Blob([PP.view2d.exportSVG(lastDesign, null, state)], { type: "image/svg+xml" }), baseName() + ".svg"));
     body.querySelector("#ex-json").addEventListener("click", () => PP.exporters.download(new Blob([JSON.stringify(state, null, 1)], { type: "application/json" }), baseName() + "-settings.json"));
     body.querySelector("#im-json").addEventListener("change", (e) => {
       const file = e.target.files[0];
@@ -652,7 +641,13 @@ window.PP = window.PP || {};
     return (n || "charm") .toLowerCase().replace(/[^a-z0-9-_]/g, "") + "-card";
   }
 
-  function syncControls() { controls.forEach((c) => c.set && c.set(state[c.f.k])); refreshVisibility(); }
+  function syncControls() {
+    controls.forEach((c) => c.set && c.set(state[c.f.k]));
+    document.querySelectorAll("[data-laserview]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.laserview === (state.laserView || "chipboard"))));
+    const tc = $("#toggle-charm");
+    if (tc) tc.setAttribute("aria-pressed", String(!!state.showCharm));
+    refreshVisibility();
+  }
   function refreshVisibility() {
     controls.forEach((c) => {
       if (c.row && c.f.when) c.row.hidden = !c.f.when(state);
@@ -747,108 +742,81 @@ window.PP = window.PP || {};
     try {
       const charm = getCharm();
       const design = PP.buildDesign(state, charm);
-      const model = PP.buildModel(design, state);
-      lastDesign = design; lastModel = model;
-      PP.view3d.update(model, design, state, layerClipZ());
-      PP.view2d.setOptions({ showThin: state.showThin, showCharm: state.showCharm });
-      PP.view2d.update(design, model, state);
-      updateLayerSlider(model);
-      renderInfo(design, model, performance.now() - t0);
+      lastDesign = design;
+      PP.view2d.setOptions({ showCharm: state.showCharm });
+      PP.view2d.update(design, null, state);
+      updateLegend();
+      renderInfo(design, performance.now() - t0);
     } catch (e) {
       console.error(e);
       toast("Build error: " + e.message, true);
     }
   }
 
-  function renderInfo(design, model, ms) {
-    const colors = { body: state.colBody, accent1: state.colAccent1, accent2: state.colAccent2 };
-    const names = { body: "Body", accent1: "Accent 1", accent2: "Accent 2" };
-    const grams = Object.entries(model.grams).map(([k, g]) => `<li><span class="swatch" style="background:${colors[k]}"></span>${names[k]} <b>${g.toFixed(1)} g</b></li>`).join("");
-    const warn = design.warnings.concat(model.warnings).map((w) => `<li class="warn">${w}</li>`).join("");
-    const notes = (design.notes || []).concat(model.notes).map((w) => `<li>${w}</li>`).join("");
-    const hidden = design.hiddenLabels ? `<li>${design.hiddenLabels} number(s) hidden behind the wordmark/pocket.</li>` : "";
-    const nWarn = design.warnings.length + model.warnings.length;
+  function updateLegend() {
+    const leg = $("#view-legend");
+    if (!leg) return;
+    const view = state.laserView || "chipboard";
+    if (view === "chipboard") {
+      leg.innerHTML = `
+        <span><i class="lg chip-cut"></i>2mm cutout (back sheet)</span>
+        <span><i class="lg score-line"></i>scored / engraved</span>
+        <span class="muted">Drag wordmark / charm · scroll to zoom · drag to pan</span>`;
+    } else if (view === "front") {
+      const hasWmCol = state.wordmarkMode !== "off" && state.laserWmStyle !== "fill" && state.laserWmCut === "score2";
+      leg.innerHTML = `
+        <span><i class="lg cut-outer"></i>outer cut (#ff0000)</span>
+        <span><i class="lg cut-inner"></i>inner cuts + charm inset (#0000ff)</span>
+        <span><i class="lg score-black"></i>score / engrave</span>
+        ${hasWmCol ? `<span><i class="lg score-black" style="background:${state.laserWmCol};border-color:transparent"></i>wordmark</span>` : ""}
+        <span class="muted">Drag wordmark / charm · scroll to zoom</span>`;
+    } else {
+      leg.innerHTML = `
+        <span><i class="lg cut-outer"></i>outer cut (#ff0000)</span>
+        <span><i class="lg cut-inner"></i>finger push hole (#0000ff)</span>
+        <span class="muted">2mm chipboard back layer (scroll to zoom · drag to pan)</span>`;
+    }
+  }
+
+  function renderInfo(design, ms) {
+    const warnings = design.warnings.slice();
+    const notes = (design.notes || []).slice();
+    if (design.pushHole && design.pushHole.length) {
+      const hb = PP.geo.bounds(design.pushHole);
+      notes.push(`Back push-out hole: ${hb.w.toFixed(1)} × ${hb.h.toFixed(1)} mm.`);
+    }
+    if (state.clearance < 0) {
+      notes.push(`Press-fit pocket: ${Math.abs(state.clearance).toFixed(2)} mm smaller per side than the charm DXF.`);
+    } else if (state.clearance < 0.05) {
+      warnings.push("Pocket clearance below 0.05 mm — test fit a cut before batching.");
+    }
+    if (state.wordmarkMode !== "off" && state.laserWmStyle !== "fill" && state.laserWmCut === "cut") {
+      notes.push("Wordmark cut through: enclosed letter centres (O, R) cut out as separate pieces.");
+    }
+    const cutList = PP.GROUPS.filter((g) => g.id !== "wordmark" && state[g.id + "Mode"] === "cut").map((g) => design.groups[g.id]);
+    if (cutList.length) {
+      const islands = PP.geo.countIslandsIfCut(PP.geo.unionAll(cutList), design.card);
+      if (islands > 0) warnings.push(`Cut-through markings create ${islands} loose island(s) that will fall out.`);
+    }
+    const warn = warnings.map((w) => `<li class="warn">${w}</li>`).join("");
+    const noteItems = notes.map((w) => `<li>${w}</li>`).join("");
+    const hidden = design.hiddenLabels ? `<li>${design.hiddenLabels} number(s) hidden behind wordmark/pocket.</li>` : "";
+    const nWarn = warnings.length;
+    const wmDesc = state.wordmarkMode === "off"
+      ? "off"
+      : `${{ outline: "outline only", center: "middle line", both: "middle + outline", fill: "filled" }[state.laserWmStyle] || "outline only"} · ${state.laserWmStyle === "fill" ? "engrave" : ({ score: "black score", score2: "colour score", cut: "cut through" }[state.laserWmCut] || "score")}`;
     let det = $("#info details");
     if (!det) {
-      $("#info").innerHTML = `<details${document.body.dataset.view === "split" ? "" : " open"}><summary></summary><div class="info-body"></div></details>`;
+      $("#info").innerHTML = `<details open><summary></summary><div class="info-body"></div></details>`;
       det = $("#info details");
     }
-    det.querySelector("summary").innerHTML = `<b>Print plan</b><span class="muted">${model.totalLayers} layers${nWarn ? ` · <span class="warn-count">${nWarn} warning${nWarn > 1 ? "s" : ""}</span>` : ""}</span>`;
+    det.querySelector("summary").innerHTML = `<b>Laser cut summary</b><span class="muted">2mm chipboard${nWarn ? ` · <span class="warn-count">${nWarn} warning${nWarn > 1 ? "s" : ""}</span>` : ""}</span>`;
     det.querySelector(".info-body").innerHTML = `
-      <p class="method ${model.method.kind}">${model.method.text}</p>
-      <ul class="mats">${grams}</ul>
-      <p class="muted">${model.zMax.toFixed(2)} mm tall · ${(design.W / 25.4).toFixed(2)} × ${(design.H / 25.4).toFixed(2)} in · rebuilt in ${ms.toFixed(0)} ms</p>
+      <p class="method">2 × 2mm chipboard layers (Front + Back)</p>
+      <p class="muted"><b>Front:</b> ${(design.W / 25.4).toFixed(2)} × ${(design.H / 25.4).toFixed(2)} in · ${state.laserMarks === "line" ? "1-line score" : "filled engrave"} · wordmark ${wmDesc}</p>
+      <p class="muted"><b>Card:</b> ${design.W.toFixed(1)} × ${design.H.toFixed(1)} mm · rebuilt in ${ms.toFixed(0)} ms</p>
       <p class="muted small">Charm: ${charmCache.info}</p>
-      ${warn || notes || hidden ? `<ul class="notes">${warn}${notes}${hidden}</ul>` : ""}`;
-  }
-
-  // ---------- layer scrubber ----------
-  function updateLayerSlider(model) {
-    const s = $("#layer-slider");
-    const atMax = +s.value >= +s.max;
-    s.max = model.totalLayers;
-    if (atMax) s.value = model.totalLayers;
-    onLayer();
-  }
-  function onLayer() {
-    const s = $("#layer-slider");
-    const n = +s.value, N = +s.max;
-    const z = state.firstLayerH + (n - 1) * state.layerH;
-    $("#layer-label").textContent = n >= N ? `All ${N} layers` : `Layer ${n} / ${N} · z ${z.toFixed(2)} mm`;
-    PP.view3d.setClip(layerClipZ());
-  }
-  function layerClipZ() {
-    const s = $("#layer-slider");
-    const n = +s.value, N = +s.max;
-    if (!lastModel || n >= N || n >= lastModel.totalLayers) return null;
-    return +(state.firstLayerH + (n - 1) * state.layerH).toFixed(4);
-  }
-
-  // ---------- exports ----------
-  function export3MF() {
-    if (state.simSlicer) toast("Exporting exact geometry (slicer simulation is preview-only).");
-    const ex = exactGeoms();
-    const blob = PP.exporters.threeMF(ex, baseName());
-    PP.exporters.download(blob, baseName() + ".3mf");
-  }
-  function exportSTL() {
-    const ex = exactGeoms();
-    const files = ex.map((p) => ({ name: `${baseName()}-${p.key}.stl`, data: PP.exporters.stl(p.geometry, p.name) }));
-    PP.exporters.download(PP.exporters.zip(files), baseName() + "-stl.zip");
-  }
-  // Exports use the exact designed geometry (without the slicer thin-feature simulation).
-  function exactGeoms() {
-    const model = state.simSlicer ? PP.buildModel(lastDesign, { ...state, simSlicer: false }) : lastModel;
-    const names = { body: "Body", accent1: "Accent 1", accent2: "Accent 2" };
-    const colors = { body: state.colBody, accent1: state.colAccent1, accent2: state.colAccent2 };
-    const by = {};
-    model.solids.forEach((s) => (by[s.mat] = by[s.mat] || []).push(s));
-    return Object.entries(by).map(([k, list]) => {
-      const geoms = list.map((s) => extrudeForExport(s.region, s.z0, s.z1)).filter(Boolean);
-      const trans = { body: state.transBody, accent1: state.transAccent1, accent2: state.transAccent2 }[k];
-      return { key: k, name: names[k] + (trans ? " (translucent)" : ""), color: colors[k], alpha: trans ? "80" : "FF", geometry: mergeGeoms(geoms) };
-    });
-  }
-  function extrudeForExport(region, z0, z1) {
-    const shapes = PP.geo.shapes(region).map((s) => {
-      const sh = new THREE.Shape(s.outer.map(([x, y]) => new THREE.Vector2(x, y)));
-      s.holes.forEach((h) => sh.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))));
-      return sh;
-    });
-    if (!shapes.length) return null;
-    const g = new THREE.ExtrudeGeometry(shapes, { depth: z1 - z0, bevelEnabled: false, curveSegments: 1 });
-    g.translate(0, 0, z0);
-    return g;
-  }
-  function mergeGeoms(geoms) {
-    let n = 0;
-    geoms.forEach((g) => (n += g.attributes.position.count));
-    const pos = new Float32Array(n * 3);
-    let o = 0;
-    geoms.forEach((g) => { pos.set(g.attributes.position.array, o); o += g.attributes.position.array.length; g.dispose(); });
-    const out = new THREE.BufferGeometry();
-    out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    return out;
+      ${warn || noteItems || hidden ? `<ul class="notes">${warn}${noteItems}${hidden}</ul>` : ""}`;
   }
 
   // ---------- misc UI ----------
@@ -861,13 +829,15 @@ window.PP = window.PP || {};
     toastTimer = setTimeout(() => (t.className = "toast"), isErr ? 6000 : 2500);
   }
 
-  function setView(v) {
-    document.body.dataset.view = v;
-    document.querySelectorAll("[data-setview]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.setview === v)));
-    setTimeout(() => {
-      window.dispatchEvent(new Event("resize"));
-      if (lastDesign) PP.view3d.resetCamera(lastDesign, PP.view3d._camView);
-    }, 30);
+  function setLaserView(v) {
+    state.laserView = v;
+    document.querySelectorAll("[data-laserview]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.laserview === v)));
+    saveState();
+    if (lastDesign) {
+      PP.view2d.setOptions({ showCharm: state.showCharm });
+      PP.view2d.update(lastDesign, null, state);
+      updateLegend();
+    }
   }
 
   function onDrag(kind, dx, dy, done) {
@@ -880,7 +850,7 @@ window.PP = window.PP || {};
   PP.app = {
     init() {
       loadState();
-      // Optional overrides via URL hash: #s={"wordmarkMode":"emboss",...}
+      // Optional overrides via URL hash: #s={"laserWmCut":"cut",...}
       const hs = (location.hash.match(/[#&]s=([^&]+)/) || [])[1];
       if (hs) { try { Object.assign(state, JSON.parse(decodeURIComponent(hs))); } catch (e) { console.warn("bad #s", e); } }
       buildPanel();
@@ -895,13 +865,21 @@ window.PP = window.PP || {};
         if (inp && btn) { inp.value = decodeURIComponent(hp); btn.click(); }
       }
       syncControls();
-      PP.view3d.init($("#view3d"));
       PP.view2d.init($("#view2d"), onDrag);
-      document.querySelectorAll("[data-setview]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.setview)));
-      document.querySelectorAll("[data-cam]").forEach((b) => b.addEventListener("click", () => lastDesign && PP.view3d.resetCamera(lastDesign, b.dataset.cam)));
+      document.querySelectorAll("[data-laserview]").forEach((b) => b.addEventListener("click", () => setLaserView(b.dataset.laserview)));
+      const tc = $("#toggle-charm");
+      if (tc) {
+        tc.setAttribute("aria-pressed", String(!!state.showCharm));
+        tc.addEventListener("click", () => {
+          state.showCharm = !state.showCharm;
+          tc.setAttribute("aria-pressed", String(!!state.showCharm));
+          saveState();
+          rebuild();
+        });
+      }
       $("#fit2d").addEventListener("click", () => lastDesign && PP.view2d.resetView(lastDesign.W, lastDesign.H));
-      $("#layer-slider").addEventListener("input", onLayer);
-      $("#foot-3mf").addEventListener("click", export3MF);
+      $("#foot-laser-front").addEventListener("click", exportLaserFront);
+      $("#foot-laser-back").addEventListener("click", exportLaserBack);
       $("#foot-save-json").addEventListener("click", () => PP.exporters.download(new Blob([JSON.stringify(state, null, 1)], { type: "application/json" }), baseName() + "-settings.json"));
       $("#foot-save-preset").addEventListener("click", () => {
         const inp = $("#preset-name");
@@ -914,18 +892,14 @@ window.PP = window.PP || {};
         }
         if (buildPresets._saveNamed) buildPresets._saveNamed(name);
       });
-      const hv = (location.hash.match(/view=(\w+)/) || [])[1];
-      setView(hv || "split");
+      const hv = (location.hash.match(/view=(chipboard|front|back)/) || [])[1];
+      if (hv) state.laserView = hv;
+      setLaserView(state.laserView || "chipboard");
       rebuild();
-      const hc = (location.hash.match(/cam=(\w+)/) || [])[1];
-      if (hc) PP.view3d.resetCamera(lastDesign, hc);
-      const hl = (location.hash.match(/layer=(\d+)/) || [])[1];
-      if (hl) { $("#layer-slider").value = hl; onLayer(); }
     },
     get state() { return state; },
     set(k, v) { state[k] = v; syncControls(); changed(k); },
     rebuild,
-    get model() { return lastModel; },
     get design() { return lastDesign; },
   };
 })();

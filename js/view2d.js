@@ -26,13 +26,32 @@ window.PP = window.PP || {};
     const hatch = el("pattern", { id: "pp-hole", width: 2, height: 2, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
     el("rect", { width: 2, height: 2, fill: "#2a2c30" }, hatch);
     el("line", { x1: 0, y1: 0, x2: 0, y2: 2, stroke: "#4a4d55", "stroke-width": 0.8 }, hatch);
-    const lost = el("pattern", { id: "pp-lost", width: 0.6, height: 0.6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(-45)" }, defs);
-    el("rect", { width: 0.6, height: 0.6, fill: "rgba(255,40,40,0.35)" }, lost);
-    el("line", { x1: 0, y1: 0, x2: 0, y2: 0.6, stroke: "#ff2020", "stroke-width": 0.3 }, lost);
-    const f = el("filter", { id: "pp-emboss", x: "-10%", y: "-10%", width: "120%", height: "120%" }, defs);
-    el("feDropShadow", { dx: 0.25, dy: -0.25, stdDeviation: 0.2, "flood-color": "#000", "flood-opacity": 0.45 }, f);
-    const f2 = el("filter", { id: "pp-deboss", x: "-10%", y: "-10%", width: "120%", height: "120%" }, defs);
-    el("feDropShadow", { dx: -0.2, dy: 0.2, stdDeviation: 0.15, "flood-color": "#fff", "flood-opacity": 0.6 }, f2);
+
+    // 2mm chipboard grain patterns (front face & recessed back layer).
+    const chip = el("pattern", { id: "pp-chipboard", width: 18, height: 18, patternUnits: "userSpaceOnUse" }, defs);
+    el("rect", { width: 18, height: 18, fill: "#c8b496" }, chip);
+    [
+      [2, 3, 1.4, 0.25, "#b8a182", 18], [8, 2, 0.9, 0.22, "#d7c6ab", -25], [14, 5, 1.6, 0.2, "#a99274", 42],
+      [5, 9, 1.1, 0.25, "#bfa98b", -12], [12, 11, 1.5, 0.22, "#b39c7d", 68], [3, 15, 1.2, 0.2, "#d4c1a5", 8],
+      [16, 14, 1.1, 0.25, "#a68e70", -40], [9, 16, 1.7, 0.22, "#baa384", 15], [6, 5, 0.45, 0.45, "#9c8568", 0],
+      [15, 9, 0.4, 0.4, "#968064", 0], [11, 6, 0.5, 0.35, "#deceb5", 0], [2, 12, 0.35, 0.35, "#968064", 0],
+    ].forEach(([x, y, w, h, fill, rot]) => {
+      el("rect", { x, y, width: w, height: h, rx: 0.15, fill, opacity: 0.65, transform: rot ? `rotate(${rot} ${x} ${y})` : "" }, chip);
+    });
+
+    const chipBack = el("pattern", { id: "pp-chipboard-back", width: 18, height: 18, patternUnits: "userSpaceOnUse" }, defs);
+    el("rect", { width: 18, height: 18, fill: "#ad9779" }, chipBack);
+    [
+      [2, 3, 1.4, 0.25, "#9c8668", 18], [8, 2, 0.9, 0.22, "#bca78a", -25], [14, 5, 1.6, 0.2, "#8f795c", 42],
+      [5, 9, 1.1, 0.25, "#a28c6e", -12], [12, 11, 1.5, 0.22, "#978063", 68], [3, 15, 1.2, 0.2, "#b8a386", 8],
+      [16, 14, 1.1, 0.25, "#8b7558", -40], [9, 16, 1.7, 0.22, "#9f886a", 15], [6, 5, 0.45, 0.45, "#826c51", 0],
+    ].forEach(([x, y, w, h, fill, rot]) => {
+      el("rect", { x, y, width: w, height: h, rx: 0.15, fill, opacity: 0.65, transform: rot ? `rotate(${rot} ${x} ${y})` : "" }, chipBack);
+    });
+
+    const cardShadow = el("filter", { id: "pp-card-shadow", x: "-10%", y: "-10%", width: "125%", height: "125%" }, defs);
+    el("feDropShadow", { dx: 0.8, dy: -1.2, stdDeviation: 1.1, "flood-color": "#000", "flood-opacity": 0.45 }, cardShadow);
+
     content = el("g", {}, svg);
     container.appendChild(svg);
 
@@ -100,79 +119,102 @@ window.PP = window.PP || {};
     if (!vb || !lastWH || lastWH[0] !== W || lastWH[1] !== H) { V.resetView(W, H); lastWH = [W, H]; }
     content.innerHTML = "";
     const g = el("g", { transform: `translate(0 ${H}) scale(1 -1)` }, content);
-    const colors = { body: p.colBody, accent1: p.colAccent1, accent2: p.colAccent2 };
     const path = (region, attrs, parent) => region && region.length ? el("path", Object.assign({ d: G.toSvgD(region), "fill-rule": "nonzero" }, attrs), parent || g) : null;
 
-    // Card body with through-cuts (holes show hatch background).
-    const cutsShown = G.unionAll(PP.GROUPS.filter((gr) => p[gr.id + "Mode"] === "cut").map((gr) => design.groups[gr.id]));
-    if (cutsShown.length) path(G.inter(cutsShown, design.card), { fill: "url(#pp-hole)" });
-    path(G.diff(design.card, cutsShown), { fill: colors.body, "fill-opacity": p.transBody ? 0.8 : 1, stroke: "#888", "stroke-width": 0.15 });
-    if (p.bevelW > 0) {
-      const innerCard = G.offset(design.card, -p.bevelW);
-      const bevelRim = G.diff(G.diff(design.card, innerCard), cutsShown);
-      path(bevelRim, { fill: shade(p.colBody, 0.9), "fill-opacity": p.transBody ? 0.6 : 0.85 });
-      path(innerCard, { fill: "none", stroke: shade(p.colBody, 0.68), "stroke-width": 0.12, "stroke-dasharray": "0.6 0.4" });
-    }
+    const view = p.laserView || "chipboard";
+    const C = V.LASER_COLORS;
+    const wmCol = p.laserWmCol || p.laserWmOutlineCol || "#00a651";
+    const L = V.laserFront(design, p);
 
-    // Pocket
-    if (design.pocket.length) path(G.diff(design.pocket, cutsShown), { fill: shade(p.colBody, 0.8), stroke: shade(p.colBody, 0.6), "stroke-width": 0.12 });
+    if (view === "chipboard") {
+      // Top 2mm chipboard sheet with through-cut holes exposing the back 2mm layer underneath.
+      const holeUnion = G.unionAll([design.pocket].concat(L.cutRegions));
+      const topSheet = holeUnion.length ? G.diff(design.card, holeUnion) : design.card;
 
-    // Features
-    PP.GROUPS.forEach((gr) => {
-      const mode = p[gr.id + "Mode"];
-      const R = design.groups[gr.id];
-      if (!R || !R.length || mode === "off" || mode === "cut") return;
-      const col = colors[p[gr.id + "Mat"]] || colors.body;
-      const op = { body: p.transBody, accent1: p.transAccent1, accent2: p.transAccent2 }[p[gr.id + "Mat"]] ? 0.7 : 1;
-      const shown = G.diff(R, design.pocket);
-      if (mode === "inlay") path(shown, { fill: col, "fill-opacity": op });
-      else if (mode === "emboss") path(shown, { fill: col, "fill-opacity": op, filter: "url(#pp-emboss)" });
-      else if (mode === "deboss") path(shown, { fill: shade(p.colBody, 0.78), filter: "url(#pp-deboss)" });
-    });
+      // Drop shadow under the assembled 2-layer chipboard card.
+      path(design.card, { fill: "#2b1e10", filter: "url(#pp-card-shadow)" });
+      // Back 2mm layer exposed inside the charm pocket and any cut-through shapes.
+      if (holeUnion.length) {
+        path(holeUnion, { fill: "url(#pp-chipboard-back)" });
+        // 2mm top-sheet wall shadow (top & left edge cast onto the back sheet).
+        const wallShadow = G.diff(holeUnion, G.translate(holeUnion, 0.4, -0.4));
+        if (wallShadow.length) path(wallShadow, { fill: "#2b1a0c", "fill-opacity": 0.48 });
+      }
+      // Top 2mm chipboard sheet.
+      path(topSheet, { fill: "url(#pp-chipboard)", stroke: "#5a4026", "stroke-width": 0.25 });
+      if (design.pocket.length) {
+        path(design.pocket, { fill: "none", stroke: "#4a321b", "stroke-width": 0.22 });
+      }
+      L.cutRegions.forEach((r) => path(r, { fill: "none", stroke: "#4a321b", "stroke-width": 0.2 }));
 
-    // Slicer simulation overlay: red = will not print, orange outline = widened.
-    if (showThin && model.thin) {
-      Object.values(model.thin).forEach((t) => {
-        path(t.lost, { fill: "url(#pp-lost)" });
-        path(t.gained, { fill: "rgba(255,138,0,0.75)" });
-      });
-    }
+      // Engraved fills -> toasted brown laser burn in chipboard.
+      L.fills.forEach((f) => el("path", { d: f.d, fill: "#5a3b1c", "fill-opacity": 0.88 }, g));
 
-    // Charm
-    path(design.pushHole, { fill: "url(#pp-hole)" });
-    if (showCharm && design.charmSolid.length) {
-      path(G.diff(design.charmSolid, design.charmSlots), { fill: "#d6ae55", stroke: "#8a6a22", "stroke-width": 0.08, opacity: 0.92 });
-    }
-    // Push-out hole outline stays visible on top of the charm.
-    path(design.pushHole, { fill: "none", stroke: "#3b82f6", "stroke-width": 0.2, "stroke-dasharray": "0.8 0.5" });
+      // Vector score / cut lines -> fine charred brown lines on the chipboard face.
+      const scoreAttr = { fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" };
+      L.lines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: "#472e17", "stroke-width": 0.2 }, scoreAttr), g));
+      L.wmLines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: "#3b2310", "stroke-width": 0.24 }, scoreAttr), g));
+      // Open cut paths (ticks / centreline cut-through) appear as thin dark slits through the top sheet.
+      L.cuts.filter((f) => f.open).forEach((f) => el("path", Object.assign({ d: f.d, stroke: "#2b1a0c", "stroke-width": 0.3 }, scoreAttr), g));
 
-    // Laser preview: dim the print rendering and draw exactly what the front laser SVG contains.
-    if (p.laserPreview) {
-      const C = V.LASER_COLORS, L = V.laserFront(design, p);
-      path(design.card, { fill: "#ffffff", "fill-opacity": 0.82 });
+      // Push-out finger hole cuts all the way through the back chipboard layer to the workbench.
+      if (design.pushHole && design.pushHole.length) {
+        path(design.pushHole, { fill: "#22252a", stroke: "#432c17", "stroke-width": 0.22 });
+        const phShadow = G.diff(design.pushHole, G.translate(design.pushHole, 0.4, -0.4));
+        if (phShadow.length) path(phShadow, { fill: "#131518", "fill-opacity": 0.65 });
+      }
+
+      // Brass charm resting in the 2mm chipboard pocket.
+      if (showCharm && design.charmSolid.length) {
+        path(G.diff(design.charmSolid, design.charmSlots), { fill: "#d6ae55", stroke: "#8a6a22", "stroke-width": 0.08, opacity: 0.94 });
+      }
+      if (design.pushHole && design.pushHole.length) {
+        path(design.pushHole, { fill: "none", stroke: "#3b82f6", "stroke-width": 0.16, "stroke-dasharray": "0.8 0.5", opacity: showCharm ? 0.65 : 0.35 });
+      }
+    } else if (view === "front") {
+      path(design.card, { fill: "#f7f7f5", filter: "url(#pp-card-shadow)" });
+      if (showCharm && design.charmSolid.length) {
+        path(G.diff(design.charmSolid, design.charmSlots), { fill: "#d6ae55", "fill-opacity": 0.14, stroke: "#8a6a22", "stroke-opacity": 0.3, "stroke-width": 0.08 });
+      }
       const lg = el("g", { "pointer-events": "none" }, g);
-      const hair = { fill: "none", "vector-effect": "non-scaling-stroke", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" };
-      L.fills.forEach((f) => el("path", { d: f.d, fill: C.engrave, "fill-opacity": 0.85 }, lg));
+      const hair = { fill: "none", "vector-effect": "non-scaling-stroke", "stroke-width": 1.35, "stroke-linecap": "round", "stroke-linejoin": "round" };
+      L.fills.forEach((f) => el("path", { d: f.d, fill: C.engrave, "fill-opacity": 0.88 }, lg));
       L.lines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.score }, hair), lg));
-      L.outlines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: p.laserWmOutlineCol || "#00a651" }, hair), lg));
+      L.wmLines.forEach((f) => el("path", Object.assign({ d: f.d, stroke: wmCol }, hair), lg));
       L.cuts.forEach((f) => el("path", Object.assign({ d: f.d, stroke: C.cut }, hair), lg));
       if (L.inset) el("path", Object.assign({ d: L.inset, stroke: C.cut }, hair), lg);
       el("path", Object.assign({ d: L.outline, stroke: C.outline }, hair), lg);
+    } else {
+      // Back SVG preview: outer card outline + push-out finger hole (plus faint charm ghost for alignment).
+      path(design.card, { fill: "#f7f7f5", filter: "url(#pp-card-shadow)" });
+      if (design.pocket.length) {
+        path(design.pocket, { fill: "none", stroke: "#bbb", "stroke-width": 0.12, "stroke-dasharray": "0.6 0.4" });
+      }
+      if (showCharm && design.charmSolid.length) {
+        path(G.diff(design.charmSolid, design.charmSlots), { fill: "#d6ae55", "fill-opacity": 0.16, stroke: "#8a6a22", "stroke-opacity": 0.35, "stroke-width": 0.08 });
+      }
+      const hair = { fill: "none", "vector-effect": "non-scaling-stroke", "stroke-width": 1.4, "stroke-linecap": "round", "stroke-linejoin": "round" };
+      if (design.pushHole && design.pushHole.length) {
+        el("path", Object.assign({ d: G.toSvgD(design.pushHole, 4), stroke: C.cut }, hair), g);
+      }
+      el("path", Object.assign({ d: G.toSvgD(design.card, 4), stroke: C.outline }, hair), g);
     }
 
-    // Drag handles
-    const handle = (b, kind, label) => {
-      if (!b) return;
-      const r = el("rect", { x: b.x0, y: b.y0, width: b.w, height: b.h, class: "handle", "data-drag": kind }, g);
-      const t = el("title", {}, r);
-      t.textContent = "Drag to move " + label;
-    };
-    handle(design.wordmarkBounds, "wordmark", "wordmark");
-    if (p.frameOn) {
-      const bx = { x0: p.boxX, y0: p.boxY, w: p.boxW, h: p.boxH };
-      el("rect", { x: bx.x0, y: bx.y0, width: bx.w, height: bx.h, class: "box-guide" }, g);
+    // Drag handles (available on Front & Chipboard previews).
+    if (view !== "back") {
+      const handle = (b, kind, label) => {
+        if (!b) return;
+        const r = el("rect", { x: b.x0, y: b.y0, width: b.w, height: b.h, class: "handle", "data-drag": kind }, g);
+        const t = el("title", {}, r);
+        t.textContent = "Drag to move " + label;
+      };
+      handle(design.wordmarkBounds, "wordmark", "wordmark");
+      if (p.frameOn) {
+        const bx = { x0: p.boxX, y0: p.boxY, w: p.boxW, h: p.boxH };
+        el("rect", { x: bx.x0, y: bx.y0, width: bx.w, height: bx.h, class: "box-guide" }, g);
+      }
+      handle(design.charmBounds, "charm", "charm (and pocket)");
     }
-    handle(design.charmBounds, "charm", "charm (and pocket)");
   };
 
   // Export the current layout as a standalone SVG string (mm units).
@@ -195,17 +237,21 @@ window.PP = window.PP || {};
     return s;
   };
 
-  // Laser layers for the FRONT sheet, shared by the SVG export and the 2D laser preview.
-  // laserMarks = "fill": markings are filled shapes (raster/fill engrave).
-  // laserMarks = "line": markings are single centerlines (vector score / cut), using the
-  //   built-in single-stroke digits for numbers and pen centerlines for the original wordmark.
-  // Features set to "Cut through" always go to the cut layer.
+  // Laser layers for the FRONT sheet, shared by the SVG export and the chipboard / laser previews.
+  // laserMarks = "line": non-wordmark features are single centerlines (vector score / cut).
+  // laserMarks = "fill": non-wordmark features are filled shapes (raster engrave / cut).
+  // Wordmark is controlled separately by:
+  //   laserWmStyle: "outline" (outer edge only, omits middle line), "center" (middle line only),
+  //                 "both" (middle line in score + outline in laserWmCut), or "fill" (filled engrave).
+  //   laserWmCut:   "score" (black), "score2" (separate colour), or "cut" (blue inner cut).
   V.laserFront = function (design, p) {
     const G = PP.geo;
     const free = G.diff(design.card, design.pocket);
     const lineMode = p.laserMarks === "line";
-    const fills = [], lines = [], cuts = [];
+    const fills = [], lines = [], wmLines = [], cuts = [], cutRegions = [];
+
     PP.GROUPS.forEach((gr) => {
+      if (gr.id === "wordmark") return;
       const mode = p[gr.id + "Mode"];
       if (mode === "off") return;
       if (lineMode) {
@@ -214,18 +260,43 @@ window.PP = window.PP || {};
       } else {
         const R = G.diff(design.groups[gr.id], design.pocket);
         if (!R.length) return;
-        if (mode === "cut") cuts.push({ id: "cut-" + gr.id, d: G.toSvgD(R, 4) });
+        if (mode === "cut") { cuts.push({ id: "cut-" + gr.id, d: G.toSvgD(R, 4) }); cutRegions.push(R); }
         else fills.push({ id: gr.id, d: G.toSvgD(R, 4) });
       }
     });
-    // Optional: the wordmark's outline (boundary of the filled shape) as its own layer/colour.
-    const outlines = [];
-    if (p.laserWmOutline && p.wordmarkMode !== "off") {
-      const R = G.diff(design.groups.wordmark || [], design.pocket);
-      if (R.length) outlines.push({ id: "wordmark-outline", d: G.toSvgD(R, 4) });
+
+    if (p.wordmarkMode !== "off") {
+      const wmStyle = p.laserWmStyle || "outline";
+      const wmCut = p.wordmarkMode === "cut" ? "cut" : (p.laserWmCut || "score2");
+      const route = (item, cutType, region) => {
+        if (cutType === "cut") { cuts.push(item); if (region) cutRegions.push(region); }
+        else if (cutType === "score2") wmLines.push(item);
+        else lines.push(item);
+      };
+      if (wmStyle === "fill") {
+        const R = G.diff(design.groups.wordmark || [], design.pocket);
+        if (R.length) {
+          if (wmCut === "cut") { cuts.push({ id: "cut-wordmark", d: G.toSvgD(R, 4) }); cutRegions.push(R); }
+          else fills.push({ id: "wordmark", d: G.toSvgD(R, 4) });
+        }
+      } else {
+        if (wmStyle === "center" || wmStyle === "both") {
+          const L = G.clipOpen((design.lines || {}).wordmark || [], free);
+          if (L.length) {
+            // In "both" mode the middle line always goes to the main black score group and the outline gets wmCut;
+            // in "center" mode the middle line itself uses wmCut.
+            route({ id: "wordmark", d: G.linesToSvgD(L, 4), open: true }, wmStyle === "center" ? wmCut : "score", null);
+          }
+        }
+        if (wmStyle === "outline" || wmStyle === "both") {
+          const R = G.diff(design.groups.wordmark || [], design.pocket);
+          if (R.length) route({ id: "wordmark-outline", d: G.toSvgD(R, 4) }, wmCut, R);
+        }
+      }
     }
+
     return {
-      fills, lines, cuts, outlines,
+      fills, lines, wmLines, cuts, cutRegions,
       inset: design.pocket.length ? G.toSvgD(design.pocket, 4) : "",
       outline: G.toSvgD(design.card, 4),
     };
@@ -236,6 +307,7 @@ window.PP = window.PP || {};
   // Laser-cutting SVG for the FRONT layer: outer card cut, charm inset cut, and all markings.
   V.exportLaserFrontSVG = function (design, model, p) {
     const W = design.W, H = design.H, C = V.LASER_COLORS;
+    const wmCol = p.laserWmCol || p.laserWmOutlineCol || "#00a651";
     const L = V.laserFront(design, p);
     let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n<g transform="translate(0 ${H}) scale(1 -1)">\n`;
     if (L.fills.length) {
@@ -248,9 +320,9 @@ window.PP = window.PP || {};
       L.lines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
       s += `</g>\n`;
     }
-    if (L.outlines.length) {
-      s += `<g id="wordmark-outlines" fill="none" stroke="${p.laserWmOutlineCol || "#00a651"}" stroke-width="0.1" stroke-linejoin="round">\n`;
-      L.outlines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
+    if (L.wmLines.length) {
+      s += `<g id="wordmark-lines" fill="none" stroke="${wmCol}" stroke-width="0.1" stroke-linecap="round" stroke-linejoin="round">\n`;
+      L.wmLines.forEach((f) => (s += `  <path id="${f.id}" d="${f.d}"/>\n`));
       s += `</g>\n`;
     }
     s += `<g id="cuts" fill="none" stroke-width="0.1">\n`;
